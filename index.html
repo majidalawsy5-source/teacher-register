@@ -40,6 +40,13 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
  .print-head{text-align:center;margin-bottom:6px}.absence-print-section{page-break-after:auto;margin:0 0 18px}.absence-print-table{width:100%;border-collapse:collapse;margin:0 0 18px;page-break-inside:auto}.absence-print-table thead{display:table-header-group}.absence-print-table th,.absence-print-table td{border:1px solid #777;padding:5px}.absence-print-table th{text-align:center}.absence-print-table .print-head{margin:0}.print-head h1{font-size:15px;margin:0}.print-head .meta{font-size:10px}.absence-print-table tr{page-break-inside:avoid}.grade-table th,.grade-table td{font-size:9px;padding:3px;border:1px solid #999}.grade-table .name-cell{min-width:0!important;width:auto!important}.grade-table input{border:0!important;width:auto!important;padding:0!important;font-size:9px!important}.student-photo-print{max-width:70px;max-height:70px}
 }
 .print-only{display:none}.print-repeat{display:none}
+
+.voice-input-wrap{display:flex;gap:8px;align-items:center;direction:rtl}
+.voice-input-wrap #modalInput{flex:1;min-width:0}
+.voice-btn{width:48px;height:48px;border:0;border-radius:12px;background:var(--navy);color:#fff;font-size:22px;cursor:pointer;flex:0 0 48px}
+.voice-btn.listening{transform:scale(1.04);box-shadow:0 0 0 4px rgba(37,99,235,.18)}
+.voice-btn:disabled{opacity:.45;cursor:not-allowed}
+.voice-status{margin-top:7px;text-align:center}
 </style>
 </head>
 <body>
@@ -222,7 +229,29 @@ function bindHome(){
 function searchStudent(q){const box=$('#searchResult');if(!box)return;const qq=normalizeName(q);if(!qq){box.classList.remove('show');box.innerHTML='';return}const hits=[];state.stages.forEach((s,si)=>s.classes.forEach((c,ci)=>c.students.forEach(st=>{if(normalizeName(st.name).includes(qq))hits.push({st,s,si,c,ci})})));box.classList.add('show');if(!hits.length){box.innerHTML='<div class="empty">لا توجد نتائج.</div>';return}box.innerHTML=hits.map(({st,s,c})=>{recalc(st);return `<div class="panel" style="box-shadow:none;margin:0 0 10px"><div class="student-profile"><div>${st.photo?`<img class="profile-photo" src="${st.photo}" alt="صورة الطالب">`:'<div class="profile-photo placeholder">👤</div>'}</div><div><div class="profile-name">${esc(st.name)}</div><div class="hint">${esc(s.name)} — ${esc(c.name)}</div><div class="data-list" style="margin-top:9px">${st.grades.map((v,i)=>`<div class="data-item"><b>${fieldName(i)}</b>${gradeText(v)||'—'}</div>`).join('')}<div class="data-item"><b>غياب</b>${arabicDigits((st.events.absent||[]).length)}</div><div class="data-item"><b>مشاغبة</b>${arabicDigits((st.events.misbehave||[]).length)}</div><div class="data-item"><b>غير محضر</b>${arabicDigits((st.events.unprepared||[]).length)}</div></div></div></div></div>`}).join('')}
 
 function bindStudents(){
- $('#addStudent')?.addEventListener('click',()=>inputModal('إضافة طالب','اسم الطالب','',async n=>{if(!n)return;const c=activeClass();const st=blankStudent(uid('stu'),n);c.students.push(st);sortStudents(c);save();render()}));
+ $('#addStudent')?.addEventListener('click',()=>studentNameModal());
+function studentNameModal(){
+  confirmModal('إضافة طالب',`<label class="small">اسم الطالب</label><div class="voice-input-wrap"><input id="modalInput" autocomplete="off" value="" placeholder="اكتب اسم الطالب أو اضغط 🎙️"><button type="button" class="voice-btn" id="voiceNameBtn" aria-label="إملاء اسم الطالب">🎙️</button></div><div id="voiceStatus" class="hint voice-status">اضغط 🎙️ وتحدث بالعربية</div>`,[
+    {text:'إضافة',kind:'primary',fn:async()=>{const v=$('#modalInput').value.trim();closeModal();if(!v)return;const c=activeClass();const st=blankStudent(uid('stu'),v);c.students.push(st);sortStudents(c);save();render()}},
+    {text:'إلغاء',kind:'soft'}
+  ],false);
+  setTimeout(()=>initStudentVoice(),50);
+}
+function initStudentVoice(){
+  const btn=$('#voiceNameBtn'), input=$('#modalInput'), status=$('#voiceStatus');
+  if(!btn||!input)return;
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){btn.disabled=true;btn.title='التعرف الصوتي غير مدعوم في هذا المتصفح';if(status)status.textContent='التعرف الصوتي غير مدعوم في هذا المتصفح';return;}
+  const rec=new SR(); rec.lang='ar-IQ'; rec.interimResults=false; rec.continuous=false;
+  let listening=false;
+  btn.onclick=()=>{
+    if(listening){try{rec.stop()}catch(e){};return;}
+    try{rec.start();listening=true;btn.classList.add('listening');if(status)status.textContent='🎙️ استماع... اذكر اسم الطالب';}catch(e){listening=false;}
+  };
+  rec.onresult=e=>{const text=(e.results?.[0]?.[0]?.transcript||'').trim();if(text)input.value=(input.value?input.value+' ':'')+text;};
+  rec.onend=()=>{listening=false;btn.classList.remove('listening');if(status)status.textContent='تم التعرف على الاسم — يمكنك تعديله قبل الإضافة';};
+  rec.onerror=e=>{listening=false;btn.classList.remove('listening');if(status)status.textContent=e.error==='not-allowed'?'اسمح للمتصفح باستخدام الميكروفون ثم حاول مرة أخرى':'تعذر التعرف على الكلام، حاول مرة أخرى';};
+}
  $('#studentFile')?.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const names=await parseNameFile(f);const c=activeClass();names.forEach(n=>{if(n)c.students.push(blankStudent(uid('stu'),n))});sortStudents(c);save();toast(`تم استيراد ${arabicDigits(names.length)} اسماً`);render()}catch(err){alert('تعذر قراءة الملف: '+err.message)}e.target.value=''});
  $$('[data-grade]').forEach(inp=>{let original=inp.value;inp.addEventListener('input',()=>{const raw=westernDigits(inp.value).replace(/[^0-9]/g,'').slice(0,3);inp.value=arabicDigits(raw);});inp.addEventListener('blur',async()=>{const st=activeClass().students.find(s=>s.id===inp.dataset.student);if(!st)return;const raw=westernDigits(inp.value).trim();if(raw!==''&&Number(raw)>100){alert('الدرجة يجب أن تكون بين ٠ و١٠٠.');inp.value=original;return}const v=parseGrade(raw);const idx=Number(inp.dataset.grade);const old=st.grades[idx];if(v===old){inp.value=gradeText(old);return}if(!await confirmAction(`تأكيد ${v==null?'حذف':'تعديل'} الدرجة للطالب ${st.name}؟`)){inp.value=gradeText(old);return}st.grades[idx]=v;original=gradeText(v);recalc(st);save();render()})});
  $$('[data-student-delete]').forEach(b=>b.onclick=async()=>{const id=b.dataset.studentDelete;if(!id)return;const c=activeClass();const st=c?.students.find(s=>s.id===id);if(!st)return;if(await confirmAction(`تأكيد حذف اسم الطالب «${st.name}»؟`)){c.students=c.students.filter(s=>s.id!==id);sortStudents(c);save();toast('تم حذف اسم الطالب');render()}});
