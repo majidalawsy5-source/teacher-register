@@ -57,6 +57,15 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 .voice-btn.listening{background:#dc2626!important;color:#fff;transform:scale(1.04);box-shadow:0 0 0 4px rgba(220,38,38,.18)}
 .voice-btn:disabled{opacity:.45;cursor:not-allowed}
 .voice-status{margin-top:7px;text-align:center}.voice-status.listening{color:#dc2626;font-weight:900}.parent-card{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}.parent-card h3{margin:0 0 8px}.parent-list{display:grid;gap:10px}.parent-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafcff}.parent-row.summon-active{background:#fff0f0;border-color:#f2b8b8}.summon-active-name{background:#ffe4e4!important}.parent-note-icon{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:0;background:transparent;font-size:1.05rem}.parent-attend-btn{min-width:44px}.parent-visit-badge{display:inline-flex;align-items:center;gap:3px;border:0;background:#eef5ff;border-radius:10px;padding:4px 7px;cursor:pointer}.parents-table{width:100%;border-collapse:collapse}.parents-table th,.parents-table td{border:1px solid var(--line);padding:7px;text-align:center}.parents-table th{background:#f1f5fb}.parent-note-input{width:100%;min-height:80px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:8px}
+/* Print fixes: keep the temporary print table visible and avoid an empty leading sheet. */
+@media print {
+  html, body { display:block !important; height:auto !important; min-height:0 !important; margin:0 !important; padding:0 !important; }
+  body { position:static !important; }
+  .print-only { display:block !important; visibility:visible !important; }
+  .print-custom-temp { position:static !important; inset:auto !important; transform:none !important; margin-top:0 !important; break-before:auto !important; page-break-before:auto !important; }
+  .print-custom-temp table { break-before:auto !important; page-break-before:auto !important; }
+  @page { margin:7mm; }
+}
 </style>
 </head>
 <body>
