@@ -43,11 +43,11 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
  .print-head{text-align:center;margin-bottom:6px}.absence-print-section{page-break-after:auto;margin:0 0 18px}.absence-print-table{width:100%;border-collapse:collapse;margin:0 0 18px;page-break-inside:auto}.absence-print-table thead{display:table-header-group}.absence-print-table th,.absence-print-table td{border:1px solid #777;padding:5px}.absence-print-table th{text-align:center}.absence-print-table .print-head{margin:0}.print-head h1{font-size:15px;margin:0}.print-head .meta{font-size:10px}.absence-print-table tr{page-break-inside:avoid}.grade-table th,.grade-table td{font-size:9px;padding:3px;border:1px solid #999}.grade-table .name-cell{min-width:0!important;width:auto!important}.grade-table input{border:0!important;width:auto!important;padding:0!important;font-size:9px!important}.student-photo-print{max-width:70px;max-height:70px}
  .print-custom-temp{display:block!important;position:static!important;float:none!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;break-inside:auto!important;page-break-inside:auto!important}
  body:has(.print-custom-temp) .print-area{display:none!important}
- .print-custom-table{display:table!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;border-collapse:collapse;table-layout:fixed;font-size:8px;direction:rtl;break-inside:auto!important;page-break-inside:auto!important}
- .print-custom-table thead{display:table-header-group!important}.print-custom-table tbody{display:table-row-group!important;break-inside:auto!important;page-break-inside:auto!important}
- .print-custom-table th,.print-custom-table td{height:auto!important;min-height:0!important;max-height:none!important;border:1px solid #777;padding:2px 2px;text-align:center;vertical-align:middle;overflow-wrap:anywhere;word-break:normal;white-space:normal}
+ .print-custom-table{display:table!important;width:100%!important;height:auto!important;min-height:0!important;max-height:none!important;margin:0!important;border-collapse:collapse;table-layout:fixed;font-size:9px;direction:rtl;break-inside:auto!important;page-break-inside:auto!important}
+ .print-custom-table thead{display:table-header-group!important;break-inside:avoid!important;page-break-inside:avoid!important}.print-custom-table tbody{display:table-row-group!important;break-inside:auto!important;page-break-inside:auto!important}
+ .print-custom-table th,.print-custom-table td{height:auto!important;min-height:0!important;max-height:none!important;border:1px solid #777;padding:4px 3px;text-align:center;vertical-align:middle;overflow-wrap:break-word;word-break:normal;white-space:normal;font-size:9px;line-height:1.25}.print-custom-table td:nth-child(2),.print-custom-table th:nth-child(2){font-size:10px;font-weight:600;overflow-wrap:normal;word-break:normal}.print-custom-table thead tr:first-child th{padding:5px 3px}.print-custom-table .print-head h1{font-size:15px}.print-custom-table .print-head .meta{font-size:10px}
  .print-custom-table tr{height:auto!important;break-inside:avoid!important;page-break-inside:avoid!important;break-after:auto!important;page-break-after:auto!important}
- .print-custom-table .seq-col{width:4%}.print-custom-table .name-col{width:21%}.print-custom-table .seq-col~col{width:auto}
+ .print-custom-table .seq-col{width:4%}.print-custom-table .name-col{width:24%}.print-custom-table col:not(.seq-col):not(.name-col){width:auto}
 }
 .print-only{display:none}.print-repeat{display:none}
 
@@ -57,15 +57,6 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 .voice-btn.listening{background:#dc2626!important;color:#fff;transform:scale(1.04);box-shadow:0 0 0 4px rgba(220,38,38,.18)}
 .voice-btn:disabled{opacity:.45;cursor:not-allowed}
 .voice-status{margin-top:7px;text-align:center}.voice-status.listening{color:#dc2626;font-weight:900}.parent-card{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}.parent-card h3{margin:0 0 8px}.parent-list{display:grid;gap:10px}.parent-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafcff}.parent-row.summon-active{background:#fff0f0;border-color:#f2b8b8}.summon-active-name{background:#ffe4e4!important}.parent-note-icon{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:0;background:transparent;font-size:1.05rem}.parent-attend-btn{min-width:44px}.parent-visit-badge{display:inline-flex;align-items:center;gap:3px;border:0;background:#eef5ff;border-radius:10px;padding:4px 7px;cursor:pointer}.parents-table{width:100%;border-collapse:collapse}.parents-table th,.parents-table td{border:1px solid var(--line);padding:7px;text-align:center}.parents-table th{background:#f1f5fb}.parent-note-input{width:100%;min-height:80px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:8px}
-/* Print fixes: keep the temporary print table visible and avoid an empty leading sheet. */
-@media print {
-  html, body { display:block !important; height:auto !important; min-height:0 !important; margin:0 !important; padding:0 !important; }
-  body { position:static !important; }
-  .print-only { display:block !important; visibility:visible !important; }
-  .print-custom-temp { position:static !important; inset:auto !important; transform:none !important; margin-top:0 !important; break-before:auto !important; page-break-before:auto !important; }
-  .print-custom-temp table { break-before:auto !important; page-break-before:auto !important; }
-  @page { margin:7mm; }
-}
 </style>
 </head>
 <body>
@@ -355,6 +346,7 @@ function doPrintColumns(fields){
  const head=`<thead><tr><th colspan="${2+fields.length}">${title}</th></tr><tr><th>ت</th><th>اسم الطالب</th>${fields.map(i=>`<th>${labels[i]}</th>`).join('')}</tr></thead>`;
  const body=(c?.students||[]).map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}</tr>`}).join('');
  wrap.innerHTML=`<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col>').join('')}</colgroup>${head}<tbody>${body||`<tr><td colspan="${2+fields.length}">لا توجد أسماء طلاب.</td></tr>`}</tbody></table>`;
+ const cols=wrap.querySelectorAll('colgroup col'); if(cols.length>2){const remaining=72/fields.length; cols.forEach((col,i)=>{if(i>=2)col.style.width=remaining+'%';});}
  document.body.appendChild(wrap); window.print(); setTimeout(()=>wrap.remove(),800);
 }
 function printAbsenceCustomize(){const dates=Object.keys(activeClass().attendance||{}).sort().reverse();if(!dates.length){alert('لا توجد سجلات حضور بعد.');return}confirmModal('تخصيص طباعة سجل الغياب',`<div class="grid"><div class="col-12"><label class="small">نوع الطباعة</label><select id="absPrintType"><option value="both">الحاضرون والغائبون</option><option value="absent">الغائبون فقط</option><option value="present">الحاضرون فقط</option></select></div><div class="col-12"><label class="small">التواريخ</label><select id="absPrintDates" multiple size="6">${dates.map(d=>`<option value="${d}" selected>${fmtDate(d)}</option>`).join('')}</select></div></div>`,[{text:'طباعة',kind:'primary',fn:()=>printAbsenceSelected($('#absPrintType').value,[...$('#absPrintDates').selectedOptions].map(o=>o.value))},{text:'إلغاء',kind:'soft'}])}
