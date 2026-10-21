@@ -64,6 +64,17 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
  body.print-custom-active .print-custom-table thead{display:table-header-group!important}
  body.print-custom-active .print-custom-table thead tr{break-inside:avoid!important;page-break-inside:avoid!important}
 }
+@media print {
+  /* Ensure the custom print table keeps its full header on every printed page. */
+  body.print-custom-active .print-custom-temp { display:block!important; position:static!important; height:auto!important; overflow:visible!important; }
+  body.print-custom-active table.print-custom-table { display:table!important; width:100%!important; height:auto!important; border-collapse:collapse!important; break-inside:auto!important; page-break-inside:auto!important; }
+  body.print-custom-active table.print-custom-table thead { display:table-header-group!important; visibility:visible!important; position:static!important; }
+  body.print-custom-active table.print-custom-table tbody { display:table-row-group!important; }
+  body.print-custom-active table.print-custom-table thead tr { display:table-row!important; visibility:visible!important; break-inside:avoid!important; page-break-inside:avoid!important; }
+  body.print-custom-active table.print-custom-table thead th { display:table-cell!important; visibility:visible!important; }
+  body.print-custom-active table.print-custom-table th.print-rotated-head { position:relative!important; }
+  body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:absolute!important; left:50%!important; top:50%!important; transform:translate(-50%,-50%) rotate(-90deg)!important; transform-origin:center center!important; }
+}
 @media print{ .screen-grade-label{display:none!important}.print-grade-label{display:inline-block!important;white-space:nowrap!important;line-height:1.1!important;transform:rotate(-90deg)!important;transform-origin:center center!important} .grade-table th.grade-cell{white-space:normal!important;line-height:1.1!important;padding:2px 1px!important;height:100px!important;min-width:28px!important;width:28px!important;max-width:28px!important;vertical-align:middle!important} @page{size:A4 portrait;margin:8mm} body.print-custom-active #app{display:none!important} body.print-custom-active .print-custom-temp{display:block!important;width:100%!important;margin:0!important;padding:0!important} body.print-custom-active .print-custom-table{width:100%!important} body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important} body.print-custom-active .print-custom-table thead tr{display:table-row!important;break-inside:avoid!important;page-break-inside:avoid!important} body.print-custom-active .print-custom-table thead th{display:table-cell!important;visibility:visible!important;white-space:normal!important;line-height:1.1!important;padding-left:1px!important;padding-right:1px!important} body.print-custom-active .print-custom-table tbody{display:table-row-group!important} body.print-custom-active .print-custom-table tr{break-inside:auto!important;page-break-inside:auto!important} }
 
 .voice-input-wrap{display:flex;gap:8px;align-items:center;direction:rtl}
