@@ -57,12 +57,20 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
  .print-custom-table .seq-col{width:4%!important}.print-custom-table .name-col{width:auto}.print-custom-table .notes-col{width:auto}.print-custom-table .grade-col{width:auto}.print-custom-table thead{display:table-header-group!important}.print-custom-table tbody{display:table-row-group!important}
 }
 .print-only{display:none}.print-custom-temp{display:none}.print-repeat{display:none}.print-grade-label{display:none}
-@media print{body.print-custom-active .print-custom-page{break-after:page!important;page-break-after:always!important;break-inside:avoid!important;page-break-inside:avoid!important}body.print-custom-active .print-custom-page-last{break-after:auto!important;page-break-after:auto!important}@media print{.print-custom-temp{display:block!important;visibility:visible!important;position:static!important;float:none!important;width:100%!important;height:auto!important;overflow:visible!important}.print-custom-temp .print-custom-table{display:table!important;table-layout:fixed!important;border-collapse:collapse!important}.print-custom-table thead{display:table-header-group!important}.print-custom-table tbody{display:table-row-group!important}.print-custom-table tfoot{display:table-footer-group!important}body.print-custom-active .print-area{display:none!important}.modal-back{display:none!important}.print-custom-table,.print-custom-table th,.print-custom-table td,.print-custom-table th:nth-child(2),.print-custom-table td:nth-child(2){font-size:16px!important;line-height:1.15!important}.print-custom-table th,.print-custom-table td{padding:1px 2px!important}.print-custom-table .print-head h1{font-size:18px!important;font-weight:700!important}.print-custom-table .print-head .meta{font-size:18px!important;font-weight:700!important}}
+@media print{.print-custom-temp{display:block!important;visibility:visible!important;position:static!important;float:none!important;width:100%!important;height:auto!important;overflow:visible!important}.print-custom-temp .print-custom-table{display:table!important;table-layout:fixed!important;border-collapse:collapse!important}.print-custom-table thead{display:table-header-group!important}.print-custom-table tbody{display:table-row-group!important}.print-custom-table tfoot{display:table-footer-group!important}body.print-custom-active .print-area{display:none!important}.modal-back{display:none!important}.print-custom-table,.print-custom-table th,.print-custom-table td,.print-custom-table th:nth-child(2),.print-custom-table td:nth-child(2){font-size:16px!important;line-height:1.15!important}.print-custom-table th,.print-custom-table td{padding:1px 2px!important}.print-custom-table .print-head h1{font-size:18px!important;font-weight:700!important}.print-custom-table .print-head .meta{font-size:18px!important;font-weight:700!important}}
 @media print{
  body.print-custom-active .print-custom-table th.print-rotated-head{position:relative!important;width:30px!important;min-width:30px!important;max-width:30px!important;height:105px!important;padding:0!important;white-space:nowrap!important;vertical-align:middle!important;overflow:visible!important}
  body.print-custom-active .print-custom-table th.print-rotated-head .print-rotated-label{position:absolute!important;left:50%!important;top:50%!important;display:block!important;width:100px!important;height:22px!important;line-height:22px!important;white-space:nowrap!important;text-align:center!important;transform:translate(-50%,-50%) rotate(-90deg)!important;transform-origin:center center!important;font-size:12px!important;font-weight:700!important}
  body.print-custom-active .print-custom-table thead{display:table-header-group!important}
  body.print-custom-active .print-custom-table thead tr{break-inside:avoid!important;page-break-inside:avoid!important}
+}
+@media print{
+ body.print-custom-active .print-first-page-info{display:block!important;break-after:avoid!important;page-break-after:avoid!important;text-align:center!important;margin:0 0 6px!important;padding:0!important}
+ body.print-custom-active .print-first-page-info h1{font-size:18px!important;font-weight:700!important;margin:0!important}
+ body.print-custom-active .print-first-page-info .meta{font-size:16px!important;font-weight:700!important}
+ body.print-custom-active .print-custom-table{break-before:auto!important;break-after:auto!important;page-break-before:auto!important;page-break-after:auto!important}
+ body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important}
+ body.print-custom-active .print-custom-table tbody{display:table-row-group!important}
 }
 @media print{ .screen-grade-label{display:none!important}.print-grade-label{display:inline-block!important;white-space:nowrap!important;line-height:1.1!important;transform:rotate(-90deg)!important;transform-origin:center center!important} .grade-table th.grade-cell{white-space:normal!important;line-height:1.1!important;padding:2px 1px!important;height:100px!important;min-width:28px!important;width:28px!important;max-width:28px!important;vertical-align:middle!important} @page{size:A4 portrait;margin:8mm} body.print-custom-active #app{display:none!important} body.print-custom-active .print-custom-temp{display:block!important;width:100%!important;margin:0!important;padding:0!important} body.print-custom-active .print-custom-table{width:100%!important} body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important} body.print-custom-active .print-custom-table thead tr{display:table-row!important;break-inside:avoid!important;page-break-inside:avoid!important} body.print-custom-active .print-custom-table thead th{display:table-cell!important;visibility:visible!important;white-space:normal!important;line-height:1.1!important;padding-left:1px!important;padding-right:1px!important} body.print-custom-active .print-custom-table tbody{display:table-row-group!important} body.print-custom-active .print-custom-table tr{break-inside:auto!important;page-break-inside:auto!important} }
 
@@ -425,24 +433,25 @@ function doPrintColumns(fields){
  const c=activeClass();
  const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];
  const wrap=document.createElement('div'); wrap.className='print-custom-temp';
- const title=`<div class="print-head"><h1>${esc(state.meta.school)}</h1><div class="meta">المدرس: ${esc(state.meta.teacher)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(activeStage().name)}${c?.name?` | الشعبة: ${esc(c.name)}`:''}</div></div>`;
+ // معلومات المدرسة والمدرس تظهر خارج الجدول، لذلك لا تتكرر مع رؤوس الأعمدة في الصفحات التالية.
+ const title=`<div class="print-head print-first-page-info"><h1>${esc(state.meta.school)}</h1><div class="meta">المدرس: ${esc(state.meta.teacher)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(activeStage().name)}${c?.name?` | الشعبة: ${esc(c.name)}`:''}</div></div>`;
  const students=c?.students||[];
  const columnCount=3+fields.length;
- const header=`<thead><tr><th colspan="${columnCount}">${title}</th></tr><tr><th>ت</th><th>اسم الطالب</th>${fields.map(i=>`<th class="print-rotated-head"><span class="print-rotated-label">${labels[i]}</span></th>`).join('')}<th>ملاحظات</th></tr></thead>`;
- const names=students.map(st=>String(st.name||''));
- const longestName=Math.max(0,...names.map(n=>[...n].length));
- const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
- const seqWidth=4, notesMin=12;
- const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
- const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
- const colgroup=`<colgroup><col class="seq-col" style="width:${seqWidth}%"><col class="name-col" style="width:${nameWidth}%">${fields.map(()=>`<col class="grade-col" style="width:${gradeWidth}%">`).join('')}<col class="notes-col" style="width:${notesWidth}%"></colgroup>`;
- const rowFor=(st,index)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(index+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`};
- // نكرر رأس الجدول صراحةً داخل كل صفحة بدل الاعتماد على تكرار thead في محرك الطباعة.
- const rowsPerPage=28;
- const chunks=[];
- if(!students.length) chunks.push(`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`);
- else for(let i=0;i<students.length;i+=rowsPerPage) chunks.push(students.slice(i,i+rowsPerPage).map((st,j)=>rowFor(st,i+j)).join(''));
- wrap.innerHTML=chunks.map((rows,i)=>`<table class="print-custom-table print-custom-page${i===chunks.length-1?' print-custom-page-last':''}">${colgroup}${header}<tbody>${rows}</tbody></table>`).join('');
+ // يحتوي thead على عناوين الأعمدة فقط، فيكررها محرك الطباعة عند انقسام الجدول بين الصفحات.
+ const head=`<thead><tr><th>ت</th><th>اسم الطالب</th>${fields.map(i=>`<th class="print-rotated-head"><span class="print-rotated-label">${labels[i]}</span></th>`).join('')}<th>ملاحظات</th></tr></thead>`;
+ const body=students.map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`}).join('');
+ wrap.innerHTML=`${title}<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col class="grade-col">').join('')}<col class="notes-col"></colgroup>${head}<tbody>${body||`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`}</tbody></table>`;
+ const cols=wrap.querySelectorAll('colgroup col'); if(cols.length>=3){
+  const names=students.map(st=>String(st.name||''));
+  const longestName=Math.max(0,...names.map(n=>[...n].length));
+  const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
+  const seqWidth=4, notesMin=12;
+  const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
+  const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
+  cols[0].style.setProperty('width',seqWidth+'%','important');
+  cols[1].style.setProperty('width',nameWidth+'%','important');
+  cols.forEach(col=>{if(col.classList.contains('grade-col'))col.style.setProperty('width',gradeWidth+'%','important');if(col.classList.contains('notes-col'))col.style.setProperty('width',notesWidth+'%','important');});
+ }
  document.body.appendChild(wrap); document.body.classList.add('print-custom-active');
  let cleaned=false; const cleanup=()=>{if(cleaned)return;cleaned=true;document.body.classList.remove('print-custom-active');wrap.remove();window.removeEventListener('afterprint',cleanup);document.removeEventListener('visibilitychange',onVisibility)};
  const onVisibility=()=>{if(document.visibilityState==='visible')setTimeout(cleanup,800)};
