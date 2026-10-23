@@ -94,6 +94,14 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
   body.print-custom-active table.print-custom-table th.print-rotated-head { position:relative!important; height:105px!important; width:30px!important; min-width:30px!important; max-width:30px!important; padding:0!important; vertical-align:middle!important; white-space:nowrap!important; overflow:visible!important; }
   body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:static!important;display:inline-block!important;width:100px!important;height:22px!important;line-height:22px!important;white-space:nowrap!important;text-align:center!important;transform:rotate(-90deg)!important;transform-origin:center center!important;font-size:12px!important;font-weight:700!important; }
 }
+
+@media print {
+ body.print-custom-active .print-custom-page { display:block!important; width:100%!important; height:auto!important; overflow:visible!important; break-after:page!important; page-break-after:always!important; }
+ body.print-custom-active .print-custom-page-last { break-after:auto!important; page-break-after:auto!important; }
+ body.print-custom-active .print-custom-page .print-custom-table { break-before:auto!important; page-break-before:auto!important; break-after:auto!important; page-break-after:auto!important; }
+ body.print-custom-active .print-custom-page .print-custom-table thead { display:table-header-group!important; }
+ body.print-custom-active .print-custom-page .print-custom-table tbody tr { break-inside:avoid!important; page-break-inside:avoid!important; }
+}
 </style>
 </head>
 <body>
@@ -453,19 +461,22 @@ function doPrintColumns(fields){
  const columnCount=3+fields.length;
  // يحتوي thead على عناوين الأعمدة فقط، فيكررها محرك الطباعة عند انقسام الجدول بين الصفحات.
  const head=`<thead><tr><th>ت</th><th>اسم الطالب</th>${fields.map(i=>`<th class="print-rotated-head"><span class="print-rotated-label">${labels[i]}</span></th>`).join('')}<th>ملاحظات</th></tr></thead>`;
- const body=students.map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`}).join('');
- wrap.innerHTML=`${title}<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col class="grade-col">').join('')}<col class="notes-col"></colgroup>${head}<tbody>${body||`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`}</tbody></table>`;
- const cols=wrap.querySelectorAll('colgroup col'); if(cols.length>=3){
-  const names=students.map(st=>String(st.name||''));
-  const longestName=Math.max(0,...names.map(n=>[...n].length));
-  const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
-  const seqWidth=4, notesMin=12;
-  const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
-  const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
-  cols[0].style.setProperty('width',seqWidth+'%','important');
-  cols[1].style.setProperty('width',nameWidth+'%','important');
-  cols.forEach(col=>{if(col.classList.contains('grade-col'))col.style.setProperty('width',gradeWidth+'%','important');if(col.classList.contains('notes-col'))col.style.setProperty('width',notesWidth+'%','important');});
- }
+ const rowHtml=students.map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`});
+ // Android WebView print does not reliably repeat THEAD. Build explicit page tables instead.
+ // 41 rows matches the current first-page capacity seen in the user's print preview.
+ const rowsPerPage=41;
+ const chunks=[];
+ for(let i=0;i<rowHtml.length;i+=rowsPerPage)chunks.push(rowHtml.slice(i,i+rowsPerPage));
+ if(!chunks.length)chunks.push([`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`]);
+ const tableFor=rows=>`<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col class="grade-col">').join('')}<col class="notes-col"></colgroup>${head}<tbody>${rows.join('')}</tbody></table>`;
+ wrap.innerHTML=chunks.map((rows,i)=>`<section class="print-custom-page${i===chunks.length-1?' print-custom-page-last':''}">${i===0?title:''}${tableFor(rows)}</section>`).join('');
+ const names=students.map(st=>String(st.name||''));
+ const longestName=Math.max(0,...names.map(n=>[...n].length));
+ const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
+ const seqWidth=4, notesMin=12;
+ const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
+ const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
+ wrap.querySelectorAll('colgroup').forEach(group=>{const cols=group.querySelectorAll('col');if(cols.length>=3){cols[0].style.setProperty('width',seqWidth+'%','important');cols[1].style.setProperty('width',nameWidth+'%','important');cols.forEach(col=>{if(col.classList.contains('grade-col'))col.style.setProperty('width',gradeWidth+'%','important');if(col.classList.contains('notes-col'))col.style.setProperty('width',notesWidth+'%','important');});}});
  document.body.appendChild(wrap); document.body.classList.add('print-custom-active');
  let cleaned=false; const cleanup=()=>{if(cleaned)return;cleaned=true;document.body.classList.remove('print-custom-active');wrap.remove();window.removeEventListener('afterprint',cleanup);document.removeEventListener('visibilitychange',onVisibility)};
  const onVisibility=()=>{if(document.visibilityState==='visible')setTimeout(cleanup,800)};
