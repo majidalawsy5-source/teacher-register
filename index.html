@@ -74,7 +74,7 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 }
 @media print{ .screen-grade-label{display:none!important}.print-grade-label{display:inline-block!important;white-space:nowrap!important;line-height:1.1!important;transform:rotate(-90deg)!important;transform-origin:center center!important} .grade-table th.grade-cell{white-space:normal!important;line-height:1.1!important;padding:2px 1px!important;height:100px!important;min-width:28px!important;width:28px!important;max-width:28px!important;vertical-align:middle!important} @page{size:A4 portrait;margin:8mm} body.print-custom-active #app{display:none!important} body.print-custom-active .print-custom-temp{display:block!important;width:100%!important;margin:0!important;padding:0!important} body.print-custom-active .print-custom-table{width:100%!important} body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important} body.print-custom-active .print-custom-table thead tr{display:table-row!important;break-inside:avoid!important;page-break-inside:avoid!important} body.print-custom-active .print-custom-table thead th{display:table-cell!important;visibility:visible!important;white-space:normal!important;line-height:1.1!important;padding-left:1px!important;padding-right:1px!important} body.print-custom-active .print-custom-table tbody{display:table-row-group!important} body.print-custom-active .print-custom-table tr{break-inside:auto!important;page-break-inside:auto!important} }
 
-/* The custom table keeps a semantic THEAD so print engines can repeat column headings. */
+/* Keep rotated labels centered inside their own header cells; retain native THEAD repetition. */
 
 .voice-input-wrap{display:flex;gap:8px;align-items:center;direction:rtl}
 .voice-input-wrap #modalInput{flex:1;min-width:0}
@@ -82,26 +82,6 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 .voice-btn.listening{background:#dc2626!important;color:#fff;transform:scale(1.04);box-shadow:0 0 0 4px rgba(220,38,38,.18)}
 .voice-btn:disabled{opacity:.45;cursor:not-allowed}
 .voice-status{margin-top:7px;text-align:center}.voice-status.listening{color:#dc2626;font-weight:900}.parent-card{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}.parent-card h3{margin:0 0 8px}.parent-list{display:grid;gap:10px}.parent-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafcff}.parent-row.summon-active{background:#fff0f0;border-color:#f2b8b8}.summon-active-name{background:#ffe4e4!important}.parent-note-icon{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:0;background:transparent;font-size:1.05rem}.parent-attend-btn{min-width:44px}.parent-visit-badge{display:inline-flex;align-items:center;gap:3px;border:0;background:#eef5ff;border-radius:10px;padding:4px 7px;cursor:pointer}.parents-table{width:100%;border-collapse:collapse}.parents-table th,.parents-table td{border:1px solid var(--line);padding:7px;text-align:center}.parents-table th{background:#f1f5fb}.parent-note-input{width:100%;min-height:80px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:8px}
-
-/* Unified custom-print header rules: do not alter row flow or pagination. */
-@media print {
-  body.print-custom-active .print-custom-temp { display:block!important; position:static!important; float:none!important; width:100%!important; height:auto!important; max-height:none!important; overflow:visible!important; }
-  body.print-custom-active table.print-custom-table { display:table!important; width:100%!important; height:auto!important; border-collapse:collapse!important; table-layout:fixed!important; break-inside:auto!important; page-break-inside:auto!important; }
-  body.print-custom-active table.print-custom-table thead { display:table-header-group!important; visibility:visible!important; }
-  body.print-custom-active table.print-custom-table tbody { display:table-row-group!important; }
-  body.print-custom-active table.print-custom-table thead tr { display:table-row!important; break-inside:avoid!important; page-break-inside:avoid!important; }
-  body.print-custom-active table.print-custom-table thead th { display:table-cell!important; visibility:visible!important; }
-  body.print-custom-active table.print-custom-table th.print-rotated-head { position:relative!important; height:105px!important; width:30px!important; min-width:30px!important; max-width:30px!important; padding:0!important; vertical-align:middle!important; white-space:nowrap!important; overflow:visible!important; }
-  body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:static!important;display:inline-block!important;width:100px!important;height:22px!important;line-height:22px!important;white-space:nowrap!important;text-align:center!important;transform:rotate(-90deg)!important;transform-origin:center center!important;font-size:12px!important;font-weight:700!important; }
-}
-
-@media print {
- body.print-custom-active .print-custom-page { display:block!important; width:100%!important; height:auto!important; overflow:visible!important; break-after:page!important; page-break-after:always!important; }
- body.print-custom-active .print-custom-page-last { break-after:auto!important; page-break-after:auto!important; }
- body.print-custom-active .print-custom-page .print-custom-table { break-before:auto!important; page-break-before:auto!important; break-after:auto!important; page-break-after:auto!important; }
- body.print-custom-active .print-custom-page .print-custom-table thead { display:table-header-group!important; }
- body.print-custom-active .print-custom-page .print-custom-table tbody tr { break-inside:avoid!important; page-break-inside:avoid!important; }
-}
 </style>
 </head>
 <body>
@@ -461,22 +441,19 @@ function doPrintColumns(fields){
  const columnCount=3+fields.length;
  // يحتوي thead على عناوين الأعمدة فقط، فيكررها محرك الطباعة عند انقسام الجدول بين الصفحات.
  const head=`<thead><tr><th>ت</th><th>اسم الطالب</th>${fields.map(i=>`<th class="print-rotated-head"><span class="print-rotated-label">${labels[i]}</span></th>`).join('')}<th>ملاحظات</th></tr></thead>`;
- const rowHtml=students.map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`});
- // Android WebView print does not reliably repeat THEAD. Build explicit page tables instead.
- // 41 rows matches the current first-page capacity seen in the user's print preview.
- const rowsPerPage=41;
- const chunks=[];
- for(let i=0;i<rowHtml.length;i+=rowsPerPage)chunks.push(rowHtml.slice(i,i+rowsPerPage));
- if(!chunks.length)chunks.push([`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`]);
- const tableFor=rows=>`<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col class="grade-col">').join('')}<col class="notes-col"></colgroup>${head}<tbody>${rows.join('')}</tbody></table>`;
- wrap.innerHTML=chunks.map((rows,i)=>`<section class="print-custom-page${i===chunks.length-1?' print-custom-page-last':''}">${i===0?title:''}${tableFor(rows)}</section>`).join('');
- const names=students.map(st=>String(st.name||''));
- const longestName=Math.max(0,...names.map(n=>[...n].length));
- const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
- const seqWidth=4, notesMin=12;
- const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
- const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
- wrap.querySelectorAll('colgroup').forEach(group=>{const cols=group.querySelectorAll('col');if(cols.length>=3){cols[0].style.setProperty('width',seqWidth+'%','important');cols[1].style.setProperty('width',nameWidth+'%','important');cols.forEach(col=>{if(col.classList.contains('grade-col'))col.style.setProperty('width',gradeWidth+'%','important');if(col.classList.contains('notes-col'))col.style.setProperty('width',notesWidth+'%','important');});}});
+ const body=students.map((st,i)=>{recalc(st);const g=st.grades||[];return `<tr><td>${arabicDigits(i+1)}</td><td>${esc(st.name)}</td>${fields.map(fi=>`<td>${gradeText(g[fi])}</td>`).join('')}<td class="print-notes-cell">${esc(st.notes||'')}</td></tr>`}).join('');
+ wrap.innerHTML=`${title}<table class="print-custom-table"><colgroup><col class="seq-col"><col class="name-col">${fields.map(()=>'<col class="grade-col">').join('')}<col class="notes-col"></colgroup>${head}<tbody>${body||`<tr><td colspan="${columnCount}">لا توجد أسماء طلاب.</td></tr>`}</tbody></table>`;
+ const cols=wrap.querySelectorAll('colgroup col'); if(cols.length>=3){
+  const names=students.map(st=>String(st.name||''));
+  const longestName=Math.max(0,...names.map(n=>[...n].length));
+  const nameWidth=Math.max(12,Math.min(27,Math.ceil(longestName*0.85+4)));
+  const seqWidth=4, notesMin=12;
+  const gradeWidth=fields.length?Math.min(6,Math.max(4.8,(100-seqWidth-nameWidth-notesMin)/fields.length)):0;
+  const notesWidth=Math.max(notesMin,100-seqWidth-nameWidth-gradeWidth*fields.length);
+  cols[0].style.setProperty('width',seqWidth+'%','important');
+  cols[1].style.setProperty('width',nameWidth+'%','important');
+  cols.forEach(col=>{if(col.classList.contains('grade-col'))col.style.setProperty('width',gradeWidth+'%','important');if(col.classList.contains('notes-col'))col.style.setProperty('width',notesWidth+'%','important');});
+ }
  document.body.appendChild(wrap); document.body.classList.add('print-custom-active');
  let cleaned=false; const cleanup=()=>{if(cleaned)return;cleaned=true;document.body.classList.remove('print-custom-active');wrap.remove();window.removeEventListener('afterprint',cleanup);document.removeEventListener('visibilitychange',onVisibility)};
  const onVisibility=()=>{if(document.visibilityState==='visible')setTimeout(cleanup,800)};
