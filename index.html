@@ -74,16 +74,7 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 }
 @media print{ .screen-grade-label{display:none!important}.print-grade-label{display:inline-block!important;white-space:nowrap!important;line-height:1.1!important;transform:rotate(-90deg)!important;transform-origin:center center!important} .grade-table th.grade-cell{white-space:normal!important;line-height:1.1!important;padding:2px 1px!important;height:100px!important;min-width:28px!important;width:28px!important;max-width:28px!important;vertical-align:middle!important} @page{size:A4 portrait;margin:8mm} body.print-custom-active #app{display:none!important} body.print-custom-active .print-custom-temp{display:block!important;width:100%!important;margin:0!important;padding:0!important} body.print-custom-active .print-custom-table{width:100%!important} body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important} body.print-custom-active .print-custom-table thead tr{display:table-row!important;break-inside:avoid!important;page-break-inside:avoid!important} body.print-custom-active .print-custom-table thead th{display:table-cell!important;visibility:visible!important;white-space:normal!important;line-height:1.1!important;padding-left:1px!important;padding-right:1px!important} body.print-custom-active .print-custom-table tbody{display:table-row-group!important} body.print-custom-active .print-custom-table tr{break-inside:auto!important;page-break-inside:auto!important} }
 
-/* Targeted fix: keep the column headings in normal table layout so Android print can repeat the THEAD. */
-@media print {
- body.print-custom-active table.print-custom-table { display:table!important; border-collapse:collapse!important; }
- body.print-custom-active table.print-custom-table thead { display:table-header-group!important; visibility:visible!important; }
- body.print-custom-active table.print-custom-table tbody { display:table-row-group!important; }
- body.print-custom-active table.print-custom-table thead tr { display:table-row!important; break-inside:avoid!important; page-break-inside:avoid!important; }
- body.print-custom-active table.print-custom-table thead th { display:table-cell!important; visibility:visible!important; }
- body.print-custom-active table.print-custom-table th.print-rotated-head { position:static!important; height:105px!important; width:30px!important; min-width:30px!important; max-width:30px!important; padding:0!important; vertical-align:middle!important; overflow:visible!important; }
- body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:static!important; display:inline-block!important; width:auto!important; height:auto!important; line-height:1.1!important; white-space:nowrap!important; transform:rotate(-90deg)!important; transform-origin:center center!important; font-size:12px!important; font-weight:700!important; }
-}
+/* The custom table keeps a semantic THEAD so print engines can repeat column headings. */
 
 .voice-input-wrap{display:flex;gap:8px;align-items:center;direction:rtl}
 .voice-input-wrap #modalInput{flex:1;min-width:0}
@@ -91,6 +82,18 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 .voice-btn.listening{background:#dc2626!important;color:#fff;transform:scale(1.04);box-shadow:0 0 0 4px rgba(220,38,38,.18)}
 .voice-btn:disabled{opacity:.45;cursor:not-allowed}
 .voice-status{margin-top:7px;text-align:center}.voice-status.listening{color:#dc2626;font-weight:900}.parent-card{border:1px solid var(--line);border-radius:16px;padding:12px;background:#fff}.parent-card h3{margin:0 0 8px}.parent-list{display:grid;gap:10px}.parent-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:#fafcff}.parent-row.summon-active{background:#fff0f0;border-color:#f2b8b8}.summon-active-name{background:#ffe4e4!important}.parent-note-icon{display:inline-flex;align-items:center;gap:3px;cursor:pointer;border:0;background:transparent;font-size:1.05rem}.parent-attend-btn{min-width:44px}.parent-visit-badge{display:inline-flex;align-items:center;gap:3px;border:0;background:#eef5ff;border-radius:10px;padding:4px 7px;cursor:pointer}.parents-table{width:100%;border-collapse:collapse}.parents-table th,.parents-table td{border:1px solid var(--line);padding:7px;text-align:center}.parents-table th{background:#f1f5fb}.parent-note-input{width:100%;min-height:80px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:8px}
+
+/* Unified custom-print header rules: do not alter row flow or pagination. */
+@media print {
+  body.print-custom-active .print-custom-temp { display:block!important; position:static!important; float:none!important; width:100%!important; height:auto!important; max-height:none!important; overflow:visible!important; }
+  body.print-custom-active table.print-custom-table { display:table!important; width:100%!important; height:auto!important; border-collapse:collapse!important; table-layout:fixed!important; break-inside:auto!important; page-break-inside:auto!important; }
+  body.print-custom-active table.print-custom-table thead { display:table-header-group!important; visibility:visible!important; }
+  body.print-custom-active table.print-custom-table tbody { display:table-row-group!important; }
+  body.print-custom-active table.print-custom-table thead tr { display:table-row!important; break-inside:avoid!important; page-break-inside:avoid!important; }
+  body.print-custom-active table.print-custom-table thead th { display:table-cell!important; visibility:visible!important; }
+  body.print-custom-active table.print-custom-table th.print-rotated-head { position:relative!important; height:105px!important; width:30px!important; min-width:30px!important; max-width:30px!important; padding:0!important; vertical-align:middle!important; white-space:nowrap!important; overflow:visible!important; }
+  body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:absolute!important; left:50%!important; top:50%!important; display:block!important; width:100px!important; height:22px!important; line-height:22px!important; white-space:nowrap!important; text-align:center!important; transform:translate(-50%,-50%) rotate(-90deg)!important; transform-origin:center center!important; font-size:12px!important; font-weight:700!important; }
+}
 </style>
 </head>
 <body>
