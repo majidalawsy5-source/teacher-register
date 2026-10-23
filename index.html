@@ -74,6 +74,17 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
 }
 @media print{ .screen-grade-label{display:none!important}.print-grade-label{display:inline-block!important;white-space:nowrap!important;line-height:1.1!important;transform:rotate(-90deg)!important;transform-origin:center center!important} .grade-table th.grade-cell{white-space:normal!important;line-height:1.1!important;padding:2px 1px!important;height:100px!important;min-width:28px!important;width:28px!important;max-width:28px!important;vertical-align:middle!important} @page{size:A4 portrait;margin:8mm} body.print-custom-active #app{display:none!important} body.print-custom-active .print-custom-temp{display:block!important;width:100%!important;margin:0!important;padding:0!important} body.print-custom-active .print-custom-table{width:100%!important} body.print-custom-active .print-custom-table thead{display:table-header-group!important;visibility:visible!important} body.print-custom-active .print-custom-table thead tr{display:table-row!important;break-inside:avoid!important;page-break-inside:avoid!important} body.print-custom-active .print-custom-table thead th{display:table-cell!important;visibility:visible!important;white-space:normal!important;line-height:1.1!important;padding-left:1px!important;padding-right:1px!important} body.print-custom-active .print-custom-table tbody{display:table-row-group!important} body.print-custom-active .print-custom-table tr{break-inside:auto!important;page-break-inside:auto!important} }
 
+/* Targeted fix: keep the column headings in normal table layout so Android print can repeat the THEAD. */
+@media print {
+ body.print-custom-active table.print-custom-table { display:table!important; border-collapse:collapse!important; }
+ body.print-custom-active table.print-custom-table thead { display:table-header-group!important; visibility:visible!important; }
+ body.print-custom-active table.print-custom-table tbody { display:table-row-group!important; }
+ body.print-custom-active table.print-custom-table thead tr { display:table-row!important; break-inside:avoid!important; page-break-inside:avoid!important; }
+ body.print-custom-active table.print-custom-table thead th { display:table-cell!important; visibility:visible!important; }
+ body.print-custom-active table.print-custom-table th.print-rotated-head { position:static!important; height:105px!important; width:30px!important; min-width:30px!important; max-width:30px!important; padding:0!important; vertical-align:middle!important; overflow:visible!important; }
+ body.print-custom-active table.print-custom-table th.print-rotated-head .print-rotated-label { position:static!important; display:inline-block!important; width:auto!important; height:auto!important; line-height:1.1!important; white-space:nowrap!important; transform:rotate(-90deg)!important; transform-origin:center center!important; font-size:12px!important; font-weight:700!important; }
+}
+
 .voice-input-wrap{display:flex;gap:8px;align-items:center;direction:rtl}
 .voice-input-wrap #modalInput{flex:1;min-width:0}
 .voice-btn{width:48px;height:48px;border:0;border-radius:12px;background:var(--navy);color:#fff;font-size:22px;cursor:pointer;flex:0 0 48px}
