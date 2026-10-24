@@ -107,6 +107,29 @@ label.small{display:block;color:var(--muted);font-size:.83rem;margin-bottom:4px}
  body.print-custom-active .print-custom-table > thead > tr > th { visibility:visible!important; }
 }
 
+
+/* Absence register printing: each date starts on a new page; repeated metadata header; each photo gets its own page. */
+@media print {
+ @page { size:A4 portrait; margin:8mm; }
+ body.print-absence-active #app { display:none!important; }
+ body.print-absence-active .print-absence-temp { display:block!important; position:static!important; width:100%!important; height:auto!important; max-height:none!important; overflow:visible!important; margin:0!important; padding:0!important; }
+ body.print-absence-active .absence-date-block { display:block!important; break-before:page!important; page-break-before:always!important; }
+ body.print-absence-active .absence-date-block.first-absence-date { break-before:auto!important; page-break-before:auto!important; }
+ body.print-absence-active .absence-print-table { display:table!important; width:100%!important; border-collapse:collapse!important; table-layout:fixed!important; margin:0!important; break-inside:auto!important; page-break-inside:auto!important; }
+ body.print-absence-active .absence-print-table thead { display:table-header-group!important; }
+ body.print-absence-active .absence-print-table tbody { display:table-row-group!important; }
+ body.print-absence-active .absence-print-table tr { break-inside:avoid!important; page-break-inside:avoid!important; }
+ body.print-absence-active .absence-print-table th, body.print-absence-active .absence-print-table td { border:1px solid #555!important; padding:5px!important; font-size:16px!important; color:#111!important; }
+ body.print-absence-active .absence-print-table th { text-align:center!important; }
+ body.print-absence-active .absence-print-meta { text-align:center!important; direction:rtl!important; margin:0 0 6px!important; }
+ body.print-absence-active .absence-print-meta h1 { font-size:18px!important; font-weight:700!important; margin:0 0 4px!important; }
+ body.print-absence-active .absence-print-meta-line { font-size:16px!important; font-weight:700!important; line-height:1.4!important; }
+ body.print-absence-active .absence-print-title { font-size:16px!important; font-weight:700!important; margin-top:5px!important; }
+ body.print-absence-active .absence-photo-page { display:flex!important; flex-direction:column!important; align-items:center!important; justify-content:flex-start!important; break-before:page!important; page-break-before:always!important; break-after:page!important; page-break-after:always!important; min-height:250mm!important; width:100%!important; }
+ body.print-absence-active .absence-photo-page img { display:block!important; max-width:100%!important; max-height:220mm!important; width:auto!important; height:auto!important; object-fit:contain!important; margin:12px auto!important; }
+ body.print-absence-active .absence-photo-caption { font-size:16px!important; font-weight:700!important; text-align:center!important; }
+}
+
 </style>
 </head>
 <body>
@@ -487,10 +510,12 @@ function doPrintColumns(fields){
 function printAbsenceCustomize(){const dates=Object.keys(activeClass().attendance||{}).sort().reverse();if(!dates.length){alert('لا توجد سجلات حضور بعد.');return}confirmModal('تخصيص طباعة سجل الغياب',`<div class="grid"><div class="col-12"><label class="small">نوع الطباعة</label><select id="absPrintType"><option value="both">الحاضرون والغائبون</option><option value="absent">الغائبون فقط</option><option value="present">الحاضرون فقط</option></select></div><div class="col-12"><label class="small">التواريخ</label><select id="absPrintDates" multiple size="6">${dates.map(d=>`<option value="${d}" selected>${fmtDate(d)}</option>`).join('')}</select></div></div>`,[{text:'طباعة',kind:'primary',fn:()=>printAbsenceSelected($('#absPrintType').value,[...$('#absPrintDates').selectedOptions].map(o=>o.value))},{text:'إلغاء',kind:'soft'}])}
 function printAbsenceSelected(type,dates){
  if(!dates.length)return;
- const c=activeClass();
+ const c=activeClass(), stage=activeStage();
  const old=document.querySelector('.print-absence-temp');if(old)old.remove();
  const wrap=document.createElement('div');wrap.className='print-absence-temp print-only';
- wrap.innerHTML=dates.map(d=>{
+ const title=type==='both'?'الحاضرون والغائبون':type==='absent'?'الغائبون فقط':'الحاضرون فقط';
+ const metaHead=(d)=>`<div class="absence-print-meta"><h1>${esc(state.meta.school)}</h1><div class="absence-print-meta-line">تاريخ الغياب: ${fmtDate(d)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(stage.name)} | الشعبة: ${esc(c.name||'')}</div></div>`;
+ wrap.innerHTML=dates.map((d,di)=>{
    const rec=c.attendance?.[d]||{};
    let rows=[];
    if(type==='both'){
@@ -499,13 +524,15 @@ function printAbsenceSelected(type,dates){
      const want=type==='absent'?'absent':'present';
      c.students.forEach((s,i)=>{if(rec[s.id]===want)rows.push({s,status:want,i:i+1})});
    }
-   const title=type==='both'?'الحاضرون والغائبون':type==='absent'?'الغائبون فقط':'الحاضرون فقط';
-   const head=`<div class="print-head"><h1>${esc(state.meta.school)}</h1><div class="meta">المدرس: ${esc(state.meta.teacher)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(activeStage().name)}${c.name?` | الشعبة: ${esc(c.name)}`:''}</div><h2 style="font-size:13px;margin:7px 0">سجل الغياب والحضور — ${fmtDate(d)}</h2></div>`;
-   return `<section class="absence-print-section"><table class="absence-print-table"><thead><tr><th colspan="3">${head}<div style="font-weight:900;margin-top:4px">${title} (${arabicDigits(rows.length)})</div></th></tr><tr><th>ت</th><th>اسم الطالب</th><th>الحالة</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${arabicDigits(i+1)}</td><td>${esc(r.s.name)}</td><td>${r.status==='absent'?'غائب':'حاضر'}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد بيانات لهذا التاريخ.</td></tr>'}</tbody></table></section>`;
+   const photos=(c.recordPhotos||[]).filter(p=>p.date===d);
+   const table=`<table class="absence-print-table"><thead><tr><th colspan="3">${metaHead(d)}<div class="absence-print-title">سجل الغياب والحضور — ${title} (${arabicDigits(rows.length)})</div></th></tr><tr><th>ت</th><th>اسم الطالب</th><th>الحالة</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${arabicDigits(i+1)}</td><td>${esc(r.s.name)}</td><td>${r.status==='absent'?'غائب':'حاضر'}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد بيانات لهذا التاريخ.</td></tr>'}</tbody></table>`;
+   const photoPages=photos.map((photo,pi)=>`<section class="absence-photo-page">${metaHead(d)}<img src="${photo.data}" alt="صورة سجل الغياب"><div class="absence-photo-caption">صورة سجل الغياب — ${fmtDate(d)}${photos.length>1?` (${arabicDigits(pi+1)})`:''}</div></section>`).join('');
+   return `<section class="absence-date-block ${di===0?'first-absence-date':''}">${table}${photoPages}</section>`;
  }).join('');
- document.body.appendChild(wrap);
- window.print();
- setTimeout(()=>wrap.remove(),1500);
+ document.body.appendChild(wrap);document.body.classList.add('print-absence-active');
+ let cleaned=false;const cleanup=()=>{if(cleaned)return;cleaned=true;document.body.classList.remove('print-absence-active');wrap.remove();window.removeEventListener('afterprint',cleanup);document.removeEventListener('visibilitychange',onVisibility)};
+ const onVisibility=()=>{if(document.visibilityState==='visible')setTimeout(cleanup,800)};
+ window.addEventListener('afterprint',cleanup,{once:true});document.addEventListener('visibilitychange',onVisibility);window.print();
 }
 function inputModal(title,label,value,ok){confirmModal(title,`<label class="small">${esc(label)}</label><input id="modalInput" value="${esc(value)}">`,[{text:'حفظ',kind:'primary',fn:async()=>{const v=$('#modalInput').value.trim();closeModal();await ok(v)}},{text:'إلغاء',kind:'soft'}],false)}
 function confirmModal(title,html,actions,close=true){const modal=$('#modal');$('#modalBack').classList.add('show');modal.innerHTML=`<div class="modal-head"><h3>${esc(title)}</h3><button class="close" id="modalClose">×</button></div><div class="modal-body">${html}</div><div class="modal-actions">${actions.map((a,i)=>`<button class="btn ${a.kind||'soft'}" data-modal-act="${i}">${esc(a.text)}</button>`).join('')}</div>`;$('#modalClose').onclick=closeModal;actions.forEach((a,i)=>$(`[data-modal-act="${i}"]`).onclick=async()=>{if(a.fn)await a.fn();if(close)closeModal()})}
