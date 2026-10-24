@@ -507,25 +507,20 @@ function doPrintColumns(fields){
  const onVisibility=()=>{if(document.visibilityState==='visible')setTimeout(cleanup,800)};
  window.addEventListener('afterprint',cleanup,{once:true}); document.addEventListener('visibilitychange',onVisibility); window.print();
 }
-function printAbsenceCustomize(){const dates=Object.keys(activeClass().attendance||{}).sort().reverse();if(!dates.length){alert('لا توجد سجلات حضور بعد.');return}confirmModal('تخصيص طباعة سجل الغياب',`<div class="grid"><div class="col-12"><label class="small">نوع الطباعة</label><select id="absPrintType"><option value="both">الحاضرون والغائبون</option><option value="absent">الغائبون فقط</option><option value="present">الحاضرون فقط</option></select></div><div class="col-12"><label class="small">التواريخ</label><select id="absPrintDates" multiple size="6">${dates.map(d=>`<option value="${d}" selected>${fmtDate(d)}</option>`).join('')}</select></div></div>`,[{text:'طباعة',kind:'primary',fn:()=>printAbsenceSelected($('#absPrintType').value,[...$('#absPrintDates').selectedOptions].map(o=>o.value))},{text:'إلغاء',kind:'soft'}])}
+function printAbsenceCustomize(){const dates=Object.keys(activeClass().attendance||{}).sort().reverse();if(!dates.length){alert('لا توجد سجلات غياب بعد.');return}confirmModal('طباعة سجل الغياب — الغائبون فقط',`<div class="grid"><div class="col-12"><label class="small">اختر تاريخًا أو عدة تواريخ</label><select id="absPrintDates" multiple size="6">${dates.map(d=>`<option value="${d}" selected>${fmtDate(d)}</option>`).join('')}</select></div></div>`,[{text:'طباعة الغائبين',kind:'primary',fn:()=>printAbsenceSelected('absent',[...$('#absPrintDates').selectedOptions].map(o=>o.value))},{text:'إلغاء',kind:'soft'}])}
 function printAbsenceSelected(type,dates){
  if(!dates.length)return;
  const c=activeClass(), stage=activeStage();
  const old=document.querySelector('.print-absence-temp');if(old)old.remove();
  const wrap=document.createElement('div');wrap.className='print-absence-temp print-only';
- const title=type==='both'?'الحاضرون والغائبون':type==='absent'?'الغائبون فقط':'الحاضرون فقط';
+ const title='الغائبون فقط';
  const metaHead=(d)=>`<div class="absence-print-meta"><h1>${esc(state.meta.school)}</h1><div class="absence-print-meta-line">تاريخ الغياب: ${fmtDate(d)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(stage.name)} | الشعبة: ${esc(c.name||'')}</div></div>`;
  wrap.innerHTML=dates.map((d,di)=>{
    const rec=c.attendance?.[d]||{};
-   let rows=[];
-   if(type==='both'){
-     c.students.forEach((s,i)=>{const status=rec[s.id];if(status==='absent'||status==='present')rows.push({s,status,i:i+1})});
-   } else {
-     const want=type==='absent'?'absent':'present';
-     c.students.forEach((s,i)=>{if(rec[s.id]===want)rows.push({s,status:want,i:i+1})});
-   }
+   const rows=[];
+   c.students.forEach((s,i)=>{if(rec[s.id]==='absent')rows.push({s,status:'absent',i:i+1})});
    const photos=(c.recordPhotos||[]).filter(p=>p.date===d);
-   const table=`<table class="absence-print-table"><thead><tr><th colspan="3">${metaHead(d)}<div class="absence-print-title">سجل الغياب والحضور — ${title} (${arabicDigits(rows.length)})</div></th></tr><tr><th>ت</th><th>اسم الطالب</th><th>الحالة</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${arabicDigits(i+1)}</td><td>${esc(r.s.name)}</td><td>${r.status==='absent'?'غائب':'حاضر'}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد بيانات لهذا التاريخ.</td></tr>'}</tbody></table>`;
+   const table=`<table class="absence-print-table"><thead><tr><th colspan="3">${metaHead(d)}<div class="absence-print-title">سجل الغياب — ${title} (${arabicDigits(rows.length)})</div></th></tr><tr><th>ت</th><th>اسم الطالب</th><th>الحالة</th></tr></thead><tbody>${rows.map((r,i)=>`<tr><td>${arabicDigits(i+1)}</td><td>${esc(r.s.name)}</td><td>${r.status==='absent'?'غائب':'حاضر'}</td></tr>`).join('')||'<tr><td colspan="3">لا توجد بيانات لهذا التاريخ.</td></tr>'}</tbody></table>`;
    const photoPages=photos.map((photo,pi)=>`<section class="absence-photo-page">${metaHead(d)}<img src="${photo.data}" alt="صورة سجل الغياب"><div class="absence-photo-caption">صورة سجل الغياب — ${fmtDate(d)}${photos.length>1?` (${arabicDigits(pi+1)})`:''}</div></section>`).join('');
    return `<section class="absence-date-block ${di===0?'first-absence-date':''}">${table}${photoPages}</section>`;
  }).join('');
