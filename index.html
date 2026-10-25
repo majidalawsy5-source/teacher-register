@@ -196,7 +196,7 @@ function render(){
  $('#app').innerHTML=`<header class="topbar"><div class="top-inner">
  <div class="brand"><img src="${state.meta.logo||'icon.svg'}" alt="شعار"><div><div class="brand-title">${esc(APP_NAME)}</div><div class="brand-sub">سجل إلكتروني للمدرس</div></div></div>
  <div class="context"><button type="button" class="pill context-picker" id="pickStudentStage" aria-label="اختيار المرحلة">المرحلة: <strong>${esc(activeStage()?.name||'—')}</strong> ▾</button><button type="button" class="pill context-picker" id="pickStudentClass" aria-label="اختيار الشعبة" ${activeStage()?.classes?.length?'':'disabled'}>الشعبة: <strong>${esc(c?.name||'لا توجد')}</strong> ▾</button></div></div>
- <nav class="nav">${tabButton('home','الرئيسية')} ${tabButton('students','الأسماء')} ${tabButton('daily','الاختبار اليومي')} ${tabButton('attendance','سجل الحضور')} ${tabButton('absence','سجل الغياب')} ${tabButton('parents','سجل أولياء الأمور')} ${tabButton('backup','النسخ الاحتياطي')} ${tabButton('cloud','النسخ السحابي')} ${tabButton('deleted','الطلاب المحذوفين')} ${tabButton('deletedGroups','المراحل والشعب المحذوفة')}</nav></header>
+ <nav class="nav">${tabButton('home','الرئيسية')} ${tabButton('students','الأسماء')} ${tabButton('daily','الاختبار اليومي')} ${tabButton('attendance','سجل الحضور')} ${tabButton('absence','سجل الغياب')} ${tabButton('parents','سجل أولياء الأمور')} ${tabButton('backup','النسخ الاحتياطي')} ${tabButton('deleted','الطلاب المحذوفين')} ${tabButton('deletedGroups','المراحل والشعب المحذوفة')} ${tabButton('cloud','النسخ السحابي')}</nav></header>
  <main class="page">${renderTab()}</main>`;
  bind();
 }
