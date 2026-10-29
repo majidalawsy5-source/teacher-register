@@ -322,7 +322,7 @@ function bind(){
  if(currentTab==='parents')bindParentRecords();
  if(currentTab==='backup')bindBackup();
  if(currentTab==='cloud')bindCloud();
- if(currentTab==='deleted')bindDeleted();
+ if(currentTab==='deleted'||currentTab==='deletedGroups')bindDeleted();
 }
 function bindHome(){
  $$('[data-meta-edit]').forEach(b=>b.onclick=()=>{const k=b.dataset.metaEdit;const labels={school:'اسم المدرسة',teacher:'اسم المدرس',subject:'اسم المادة'};inputModal('تعديل '+labels[k],labels[k],state.meta[k],async n=>{if(!n)return;if(!await confirmAction('تأكيد تعديل '+labels[k]+'؟'))return;state.meta[k]=n;save();render()})});
