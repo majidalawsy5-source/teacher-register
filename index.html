@@ -159,19 +159,49 @@ function collator(){return new Intl.Collator('ar',{numeric:false,sensitivity:'ba
 function sortStudents(cls){cls.students.sort((a,b)=>collator().compare(a.name||'',b.name||''))}
 function blankStudent(id,name){return {id,name:name.trim(),photo:'',notes:'',grades:Array(12).fill(null),events:{absent:[],misbehave:[],unprepared:[]},summons:[],parentVisits:[]}}
 function makeDefault(){return {version:1,updatedAt:Date.now(),deletedStudents:[],deletedGroups:[],studentLifecycle:{},stageLifecycle:{},classLifecycle:{},parentRecordLifecycle:{},parentRecords:[],meta:{school:'اسم المدرسة',teacher:'اسم المدرس',subject:'اسم المادة',logo:'',nameColWidth:220},stages:[{name:'المرحلة ١',classes:[{name:'الشعبة ١',students:[],attendance:{},recordPhotos:[]}]}]}}
-function ensureState(){
- let raw=localStorage.getItem(STORAGE_KEY); if(!raw){state=makeDefault();save(false);return}
- try{state=JSON.parse(raw);normalizeState()}catch(e){state=makeDefault();save(false)}
+// ===== التخزين: IndexedDB (مساحة كبيرة) مع احتياط localStorage =====
+const DB_NAME='teacherRegisterDB',DB_STORE='kv';
+let idbOk=true,dbPromise=null,persistTimer=null,persistBusy=false,persistAgain=false,warnedSave=false;
+function getDB(){if(!dbPromise)dbPromise=new Promise((res,rej)=>{if(!window.indexedDB){rej(new Error('no idb'));return}const r=indexedDB.open(DB_NAME,1);r.onupgradeneeded=()=>{r.result.createObjectStore(DB_STORE)};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);r.onblocked=()=>rej(new Error('blocked'))});return dbPromise}
+async function idbGet(k){const db=await getDB();return new Promise((res,rej)=>{const q=db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}
+async function idbSet(k,v){const db=await getDB();return new Promise((res,rej)=>{const tx=db.transaction(DB_STORE,'readwrite');tx.objectStore(DB_STORE).put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);tx.onabort=()=>rej(tx.error||new Error('abort'))})}
+async function ensureState(){
+ try{await getDB()}catch(e){idbOk=false}
+ if(idbOk){try{const saved=await idbGet(STORAGE_KEY);if(saved&&typeof saved==='object'&&Array.isArray(saved.stages)){state=saved;normalizeState();return}}catch(e){idbOk=false}}
+ // لا توجد بيانات في IndexedDB: ننقل البيانات القديمة من localStorage إن وجدت
+ let raw=null;try{raw=localStorage.getItem(STORAGE_KEY)}catch(e){}
+ if(raw){
+  let parsed=null;try{parsed=JSON.parse(raw)}catch(e){}
+  if(parsed&&Array.isArray(parsed.stages)){
+   state=parsed;normalizeState();
+   if(idbOk){try{await idbSet(STORAGE_KEY,state);const back=await idbGet(STORAGE_KEY);if(back&&Array.isArray(back.stages)&&back.stages.length===state.stages.length){try{localStorage.removeItem(STORAGE_KEY)}catch(e){}}else{idbOk=false}}catch(e){idbOk=false}}
+   return;
+  }
+ }
+ state=makeDefault();save(false);
 }
+async function persistNow(){
+ if(!state)return;
+ if(persistBusy){persistAgain=true;return}
+ persistBusy=true;
+ try{if(idbOk){await idbSet(STORAGE_KEY,state)}else{localStorage.setItem(STORAGE_KEY,JSON.stringify(state))}warnedSave=false}
+ catch(e){if(!warnedSave){warnedSave=true;alert('تعذّر حفظ البيانات على هذا الجهاز! صدّر نسخة احتياطية الآن من صفحة النسخ الاحتياطي.')}}
+ persistBusy=false;
+ if(persistAgain){persistAgain=false;persistNow()}
+}
+function save(){
+ state.updatedAt=Date.now();
+ clearTimeout(persistTimer);persistTimer=setTimeout(()=>{persistTimer=null;persistNow()},250);
+}
+function flushSave(){if(persistTimer){clearTimeout(persistTimer);persistTimer=null;persistNow()}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushSave()});
+window.addEventListener('pagehide',flushSave);
 function normalizeState(){
  if(!state||typeof state!=='object') state=makeDefault();
  state.deletedStudents=Array.isArray(state.deletedStudents)?state.deletedStudents:[]; state.deletedGroups=Array.isArray(state.deletedGroups)?state.deletedGroups:[]; state.stageLifecycle=state.stageLifecycle&&typeof state.stageLifecycle==='object'?state.stageLifecycle:{}; state.classLifecycle=state.classLifecycle&&typeof state.classLifecycle==='object'?state.classLifecycle:{}; state.studentLifecycle=state.studentLifecycle&&typeof state.studentLifecycle==='object'?state.studentLifecycle:{}; state.parentRecords=Array.isArray(state.parentRecords)?state.parentRecords:[]; state.parentRecordLifecycle=state.parentRecordLifecycle&&typeof state.parentRecordLifecycle==='object'?state.parentRecordLifecycle:{}; state.meta=state.meta||{}; state.meta.school=state.meta.school??'اسم المدرسة'; state.meta.teacher=state.meta.teacher??'اسم المدرس'; state.meta.subject=state.meta.subject??'اسم المادة'; state.meta.logo=state.meta.logo||''; state.meta.nameColWidth=Math.max(120,Math.min(500,Number(state.meta.nameColWidth)||220));
  if(!Array.isArray(state.stages)||!state.stages.length) state.stages=[{name:'المرحلة ١',classes:[{name:'الشعبة ١',students:[],attendance:{},recordPhotos:[]}]}];
  state.stages.forEach((s,i)=>{s.id=s.id||uid('stage');s.name=s.name||`المرحلة ${arabicDigits(i+1)}`;if(!Array.isArray(s.classes))s.classes=[];s.classes.forEach((c,j)=>{c.id=c.id||uid('class');c.name=c.name||`الشعبة ${arabicDigits(j+1)}`;c.attendance=c.attendance||{};c.recordPhotos=Array.isArray(c.recordPhotos)?c.recordPhotos:[];c.students=Array.isArray(c.students)?c.students:[];c.students.forEach(st=>{st.id=st.id||uid('student');st.events=st.events||{};st.notes=st.notes??'';st.events.absent=st.events.absent||[];st.events.misbehave=st.events.misbehave||[];st.events.unprepared=st.events.unprepared||[];st.summons=Array.isArray(st.summons)?st.summons:[];st.parentVisits=Array.isArray(st.parentVisits)?st.parentVisits:[];st.grades=Array.isArray(st.grades)?st.grades.concat(Array(12).fill(null)).slice(0,12):Array(12).fill(null);st.dailyMarks=st.dailyMarks&&typeof st.dailyMarks==='object'?st.dailyMarks:{f1:{oral1:[],oral2:[]},f2:{oral1:[],oral2:[]}};['f1','f2'].forEach(k=>{st.dailyMarks[k]=st.dailyMarks[k]||{};['oral1','oral2'].forEach(q=>st.dailyMarks[k][q]=Array.isArray(st.dailyMarks[k][q])?st.dailyMarks[k][q]:[])});st.manualOral=st.manualOral&&typeof st.manualOral==='object'?st.manualOral:{};/* لا نفترض أن درجات الشفهي القديمة يدوية؛ التثبيت اليدوي لا يحدث إلا عند تعديل الحقل من تبويب الأسماء */}) ;sortStudents(c)})})
  currentStage=Math.min(currentStage,state.stages.length-1); currentClass=Math.min(currentClass,Math.max(0,(state.stages[currentStage].classes.length-1))); if(state.stages[currentStage].classes.length===0) currentClass=-1;
-}
-function save(){
- state.updatedAt=Date.now();localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 }
 function activeStage(){return state.stages[currentStage]}
 function activeClass(){return currentClass>=0?activeStage()?.classes[currentClass]:null}
@@ -462,8 +492,8 @@ function bindDeleted(){
 }
 
 function photoMenu(studentId,action){const st=activeClass().students.find(s=>s.id===studentId);if(!st)return;if(action==='add'){openPhotoPicker(studentId,false);return}confirmModal('إدارة صورة الطالب',`<div style="text-align:center"><img src="${st.photo}" style="max-width:220px;max-height:250px;border-radius:18px;object-fit:cover"></div>`,[{text:'مشاهدة',kind:'primary',fn:()=>window.open(st.photo,'_blank')},{text:'استبدال',kind:'green',fn:()=>openPhotoPicker(studentId,true)},{text:'حذف',kind:'red',fn:async()=>{if(await confirmAction('تأكيد حذف صورة الطالب؟')){st.photo='';save();render()}}}])}
-function openGenericImagePicker(onData){confirmModal('اختيار الصورة','<div class="toolbar"><button class="btn primary" id="pickGallery">🖼️ اختيار من الاستوديو</button><button class="btn green" id="pickCamera">📷 التقاط بالكاميرا</button></div>',[{text:'إلغاء',kind:'soft'}]);setTimeout(()=>{const make=(capture)=>{const input=document.createElement('input');input.type='file';input.accept='image/*';if(capture)input.capture='environment';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;closeModal();await onData(await fileToOptimizedDataURL(f,1000,0.78))};input.click()};$('#pickGallery')?.addEventListener('click',()=>make(false));$('#pickCamera')?.addEventListener('click',()=>make(true))},0)}
-function openPhotoPicker(studentId,replace){openGenericImagePicker(async data=>{const st=activeClass().students.find(s=>s.id===studentId);if(!st)return;st.photo=data;save();render()})}
+function openGenericImagePicker(onData,maxSize,q){confirmModal('اختيار الصورة','<div class="toolbar"><button class="btn primary" id="pickGallery">🖼️ اختيار من الاستوديو</button><button class="btn green" id="pickCamera">📷 التقاط بالكاميرا</button></div>',[{text:'إلغاء',kind:'soft'}]);setTimeout(()=>{const make=(capture)=>{const input=document.createElement('input');input.type='file';input.accept='image/*';if(capture)input.capture='environment';input.onchange=async()=>{const f=input.files?.[0];if(!f)return;closeModal();await onData(await fileToOptimizedDataURL(f,maxSize||1000,q||0.78))};input.click()};$('#pickGallery')?.addEventListener('click',()=>make(false));$('#pickCamera')?.addEventListener('click',()=>make(true))},0)}
+function openPhotoPicker(studentId,replace){openGenericImagePicker(async data=>{const st=activeClass().students.find(s=>s.id===studentId);if(!st)return;st.photo=data;save();render()},500,0.75)}
 function addParentSummon(studentId){const c=activeClass();const st=c?.students.find(s=>s.id===studentId);if(!st)return;st.summons=st.summons||[];const previous=st.summons.length;if(previous>=1){const details=st.summons.map((x,i)=>`الاستدعاء ${arabicDigits(i+1)}: ${fmtDate(x.date)}${x.time?` — ${esc(x.time)}`:''}${x.note?` — ${esc(x.note)}`:''}`).join('<br>');confirmModal('تنبيه: تكرار استدعاء ولي الأمر',`<div class="data-list"><div class="data-item">هذا الطالب لديه ${arabicDigits(previous)} استدعاء سابق.</div><div class="data-item">${details}</div></div>`,[{text:'متابعة وتسجيل استدعاء جديد',kind:'red',fn:()=>{recordNewSummon(st)}}]);return}recordNewSummon(st)}
 function recordNewSummon(st){st.summons=st.summons||[];st.summons.push({id:uid('sum'),date:todayISO(),time:new Intl.DateTimeFormat('ar-IQ',{timeStyle:'short'}).format(new Date()),resolved:false});save();toast('تم تسجيل استدعاء ولي الأمر');render()}
 function showSummons(studentId){const st=activeClass().students.find(s=>s.id===studentId);const arr=st?.summons||[];confirmModal('سجل استدعاءات ولي الأمر',`<div style="display:grid;gap:7px">${arr.length?arr.map((x,i)=>`<div class="data-item"><b>الاستدعاء ${arabicDigits(i+1)}</b> — ${fmtDate(x.date)}${x.time?` — ${esc(x.time)}`:''}${x.resolved?' — تم الحضور':''}</div>`).join(''):'لا توجد سجلات.'}</div>`,[{text:'إغلاق',kind:'soft'}])}
@@ -563,9 +593,7 @@ document.addEventListener('click',e=>{if(!e.target.closest('.chip-menu'))$$('.me
 // إزالة إعدادات الدخول السحابي القديمة محلياً؛ لا يؤثر ذلك في بيانات Firebase نفسها.
 localStorage.removeItem('teacherCloudSession');
 localStorage.removeItem('teacherCloudConfig');
-ensureState();
-if(activeStage().classes.length===0)currentClass=-1;
-render();
+ensureState().then(()=>{if(activeStage().classes.length===0)currentClass=-1;render();try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}});
 
 // service worker
 if('serviceWorker' in navigator && location.protocol!=='file:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
