@@ -1,4 +1,4 @@
-const CACHE = 'teacher-register-cache-v3';
+const CACHE = 'teacher-register-cache-v4';
 const CORE = [
   './',
   './index.html',
@@ -9,11 +9,11 @@ const CORE = [
   './apple-touch-icon.png'
 ];
 
-// تثبيت: نخزّن كل ملف على حدة حتى لا يفشل التثبيت كله إذا ملف واحد ناقص
+// تثبيت: نخزّن كل ملف على حدة (من الإنترنت مباشرة) حتى لا يفشل التثبيت كله إذا ملف واحد ناقص
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => Promise.all(CORE.map(u => c.add(u).catch(() => null))))
+      .then(c => Promise.all(CORE.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => null))))
       .then(() => self.skipWaiting())
   );
 });
@@ -36,15 +36,18 @@ self.addEventListener('fetch', e => {
   const isPage = req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html');
 
   if (isPage) {
-    // الصفحة: نحاول الإنترنت أولاً (حتى تصل التحديثات تلقائياً)، وإذا ما كو نت نستخدم المخزّن
+    // الصفحة: نحاول الإنترنت أولاً (حتى تصل التحديثات تلقائياً)، ونحدّث النسخة المخزّنة بكل مفاتيحها
+    // وإذا ما كو نت نستخدم آخر نسخة محدّثة
     e.respondWith(
       fetch(req)
         .then(r => {
-          const copy = r.clone();
-          caches.open(CACHE).then(c => c.put('./index.html', copy));
+          if (r.ok) {
+            const c1 = r.clone(), c2 = r.clone();
+            caches.open(CACHE).then(c => { c.put('./index.html', c1); c.put('./', c2); });
+          }
           return r;
         })
-        .catch(() => caches.match(req).then(m => m || caches.match('./index.html')))
+        .catch(() => caches.match('./index.html').then(m => m || caches.match(req)))
     );
     return;
   }
