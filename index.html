@@ -528,6 +528,7 @@ const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u
 
 function printCustomize(){const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];confirmModal('تخصيص الطباعة',`<div class="grid" id="printFields">${labels.map((l,i)=>`<label class="data-item"><input type="checkbox" checked data-print-field="${i}"> ${l}</label>`).join('')}</div><div class="notice">سيتم طباعة الأسماء والتسلسل دائماً، مع إضافة حقل الملاحظات في نهاية الجدول. لن تطبع أزرار البرنامج.</div>`,[{text:'طباعة',kind:'primary',fn:()=>{const selected=$$('[data-print-field]:checked').map(x=>Number(x.dataset.printField));doPrintColumns(selected)}},{text:'إلغاء',kind:'soft'}])}
 function doPrintColumns(fields){
+ if(usePdfPrint()){printColumnsPdf(fields);return}
  const c=activeClass();
  const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];
  const wrap=document.createElement('div'); wrap.className='print-custom-temp';
@@ -558,6 +559,7 @@ function doPrintColumns(fields){
 function printAbsenceCustomize(){const dates=Object.keys(activeClass().attendance||{}).sort().reverse();if(!dates.length){alert('لا توجد سجلات غياب بعد.');return}confirmModal('طباعة سجل الغياب — الغائبون فقط',`<div class="grid"><div class="col-12"><label class="small">اختر تاريخًا أو عدة تواريخ</label><select id="absPrintDates" multiple size="6">${dates.map(d=>`<option value="${d}" selected>${fmtDate(d)}</option>`).join('')}</select></div></div>`,[{text:'طباعة الغائبين',kind:'primary',fn:()=>printAbsenceSelected('absent',[...$('#absPrintDates').selectedOptions].map(o=>o.value))},{text:'إلغاء',kind:'soft'}])}
 function printAbsenceSelected(type,dates){
  if(!dates.length)return;
+ if(usePdfPrint()){printAbsencePdf(dates);return}
  const c=activeClass(), stage=activeStage();
  const old=document.querySelector('.print-absence-temp');if(old)old.remove();
  const wrap=document.createElement('div');wrap.className='print-absence-temp print-only';
@@ -589,6 +591,132 @@ async function fileToDataURL(file){return new Promise((res,rej)=>{const r=new Fi
 async function fileToOptimizedDataURL(file,maxSize,q){const src=await fileToDataURL(file);return new Promise((resolve,reject)=>{const img=new Image();img.onerror=()=>reject(new Error('img'));img.onload=()=>{let w=img.width,h=img.height;if(Math.max(w,h)>maxSize){if(w>=h){h=Math.round(h*maxSize/w);w=maxSize}else{w=Math.round(w*maxSize/h);h=maxSize}}const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);resolve(c.toDataURL('image/jpeg',q))};img.src=src})}
 
 document.addEventListener('click',e=>{if(!e.target.closest('.chip-menu'))$$('.menu.show').forEach(m=>m.classList.remove('show'))});$('#modalBack').addEventListener('click',e=>{if(e.target.id==='modalBack')closeModal()});
+
+// ===== الطباعة على الهواتف والأجهزة اللوحية: رسم الصفحات ← ملف PDF ← مشاركة/طباعة =====
+// (أمر الطباعة المباشر لا يعمل في التطبيقات المثبتة على الشاشة الرئيسية بالآيفون)
+function usePdfPrint(){try{return window.matchMedia('(pointer:coarse)').matches}catch(e){return false}}
+const PP={W:1240,H:1754,M:47}; // A4 بدقة 150 نقطة/إنش، وهامش 8 ملم
+const ppDummy=(()=>{const c=document.createElement('canvas');c.width=c.height=1;return c.getContext('2d')})();
+function ppFont(px,bold){return (bold?'700 ':'400 ')+px+'px '+(getComputedStyle(document.body).fontFamily||'sans-serif')}
+function ppPage(dry){if(dry)return {c:null,x:ppDummy};const c=document.createElement('canvas');c.width=PP.W;c.height=PP.H;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,PP.W,PP.H);x.fillStyle='#000';x.strokeStyle='#000';return {c,x}}
+function ppText(x,t,px,y,align,xp,bold){x.direction='rtl';x.font=ppFont(px,bold);x.textAlign=align;x.textBaseline='middle';x.fillStyle='#000';x.fillText(t,xp,y)}
+function ppWrap(x,text,maxW){const words=String(text||'').split(/\s+/).filter(Boolean);const out=[];let cur='';for(const w of words){const t=cur?cur+' '+w:w;if(!cur||x.measureText(t).width<=maxW)cur=t;else{out.push(cur);cur=w}}if(cur)out.push(cur);return out.length?out:['']}
+function ppHeadBlock(x,y,school,meta,sub){
+  let h=0;
+  ppText(x,school,38,y+26,'center',PP.W/2,true);h+=56;
+  let px=30;x.font=ppFont(px,true);while(px>18&&x.measureText(meta).width>PP.W-2*PP.M){px--;x.font=ppFont(px,true)}
+  ppText(x,meta,px,y+h+16,'center',PP.W/2,true);h+=40;
+  if(sub){ppText(x,sub,32,y+h+18,'center',PP.W/2,true);h+=48}
+  return h+8;
+}
+function ppTable(o,dry){
+  const s=o.scale||1,fs=Math.round(22*s),lh=Math.round(fs*1.3),padY=Math.round(5*s),padX=8,right=PP.W-PP.M,tableW=PP.W-2*PP.M;
+  ppDummy.font=ppFont(Math.round(21*s),true);
+  let headH=Math.round(46*s);
+  o.cols.forEach(c=>{if(c.rot)headH=Math.max(headH,Math.ceil(ppDummy.measureText(c.label).width)+Math.round(34*s))});
+  const colR=[];let acc=right;o.cols.forEach(c=>{colR.push(acc);acc-=c.w});
+  const pages=[];let pg=null,y=0;
+  const drawHead=()=>{const x=pg.x;x.lineWidth=2;x.strokeStyle='#000';x.fillStyle='#e9edf3';x.fillRect(PP.M,y,tableW,headH);
+    o.cols.forEach((c,i)=>{x.strokeStyle='#000';x.lineWidth=2;x.strokeRect(colR[i]-c.w,y,c.w,headH);const cx=colR[i]-c.w/2;
+      if(c.rot){x.save();x.translate(cx,y+headH/2);x.rotate(-Math.PI/2);ppText(x,c.label,Math.round(21*s),0,'center',0,true);x.restore()}
+      else ppText(x,c.label,Math.round(22*s),y+headH/2,'center',cx,true)});
+    y+=headH};
+  const newPg=()=>{pg=ppPage(dry);pages.push(pg);y=PP.M;if(o.blockEvery||pages.length===1)y+=o.block(pg.x,y);drawHead()};
+  newPg();
+  for(const row of o.rows){
+    const cells=o.cols.map((c,i)=>{ppDummy.font=ppFont(fs,c.bold);return c.wrap?ppWrap(ppDummy,row[i],c.w-2*padX):[String(row[i]==null?'':row[i])]});
+    const rowH=Math.max(...cells.map(l=>l.length))*lh+2*padY;
+    if(y+rowH>PP.H-PP.M)newPg();
+    const x=pg.x;x.lineWidth=2;x.strokeStyle='#000';
+    o.cols.forEach((c,i)=>{x.strokeRect(colR[i]-c.w,y,c.w,rowH);const lines=cells[i],top=y+(rowH-lines.length*lh)/2;
+      lines.forEach((t,j)=>{const yy=top+lh*(j+.5);if(c.align==='center')ppText(x,t,fs,yy,'center',colR[i]-c.w/2,c.bold);else ppText(x,t,fs,yy,'right',colR[i]-padX,c.bold)})});
+    y+=rowH}
+  return pages}
+function ppFitTable(o){for(const s of [1,.94,.88,.82,.76,.7]){o.scale=s;if(ppTable(o,true).length<=1)return ppTable(o,false)}o.scale=1;return ppTable(o,false)}
+function ppBuildPdf(canvases){
+  const enc=new TextEncoder(),chunks=[],offs=[];let len=0;
+  const put=d=>{const u=typeof d==='string'?enc.encode(d):d;chunks.push(u);len+=u.length};
+  const n=canvases.length,W=595.28,H=841.89;
+  put('%PDF-1.4\n');
+  const kids=canvases.map((_,i)=>`${3+3*i} 0 R`).join(' ');
+  offs[1]=len;put('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offs[2]=len;put(`2 0 obj\n<< /Type /Pages /Kids [${kids}] /Count ${n} >>\nendobj\n`);
+  canvases.forEach((c,i)=>{
+    const pid=3+3*i,cid=4+3*i,iid=5+3*i;
+    const bin=atob(c.toDataURL('image/jpeg',0.92).split(',')[1]),bytes=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)bytes[k]=bin.charCodeAt(k);
+    offs[pid]=len;put(`${pid} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>\nendobj\n`);
+    const cs=`q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    offs[cid]=len;put(`${cid} 0 obj\n<< /Length ${cs.length} >>\nstream\n${cs}\nendstream\nendobj\n`);
+    offs[iid]=len;put(`${iid} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${c.width} /Height ${c.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${bytes.length} >>\nstream\n`);put(bytes);put('\nendstream\nendobj\n');
+  });
+  const total=3+3*n,xref=len;
+  let x=`xref\n0 ${total}\n0000000000 65535 f \n`;
+  for(let i=1;i<total;i++)x+=String(offs[i]).padStart(10,'0')+' 00000 n \n';
+  put(x+`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  return new Blob(chunks,{type:'application/pdf'});
+}
+function ppOpen(blob){const u=URL.createObjectURL(blob);const w=window.open(u,'_blank');if(!w){const a=document.createElement('a');a.href=u;a.download='print.pdf';document.body.appendChild(a);a.click();a.remove()}setTimeout(()=>URL.revokeObjectURL(u),120000)}
+async function ppShare(blob,fname){
+  try{const f=new File([blob],fname,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:fname});return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  ppOpen(blob);
+}
+function ppFinish(pages,name){
+  const canvases=pages.map(p=>p.c);
+  const blob=ppBuildPdf(canvases),fname=name+'.pdf';
+  const preview=canvases[0].toDataURL('image/jpeg',.5);
+  confirmModal('ملف الطباعة جاهز',`<div class="notice">${arabicDigits(canvases.length)} صفحة. اضغط «مشاركة / طباعة» ثم اختر «طباعة» لطباعته مباشرة، أو «حفظ في الملفات».</div><img src="${preview}" alt="معاينة" style="width:100%;max-height:45vh;object-fit:contain;border:1px solid #ccd;border-radius:8px;margin-top:8px;background:#fff">`,[
+    {text:'📤 مشاركة / طباعة',kind:'primary',fn:()=>ppShare(blob,fname)},
+    {text:'فتح الملف',kind:'soft',fn:()=>ppOpen(blob)},
+    {text:'إغلاق',kind:'soft'}]);
+}
+async function printColumnsPdf(fields){
+  toast('جارٍ تجهيز ملف الطباعة…');await new Promise(r=>setTimeout(r,80));
+  try{
+    const c=activeClass(),stage=activeStage(),students=c?.students||[];
+    const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];
+    const tableW=PP.W-2*PP.M;
+    const longest=Math.max(0,...students.map(s=>[...String(s.name||'')].length));
+    const nameP=Math.max(12,Math.min(27,Math.ceil(longest*0.85+4))),seqP=4,notesMin=12;
+    const gradeP=fields.length?Math.min(6,Math.max(4.8,(100-seqP-nameP-notesMin)/fields.length)):0;
+    const px=p=>Math.round(tableW*p/100);
+    const cols=[{w:px(seqP),label:'ت',align:'center'},{w:px(nameP),label:'اسم الطالب',align:'right',bold:true,wrap:true},...fields.map(i=>({w:px(gradeP),label:labels[i],rot:true,align:'center'})),{w:0,label:'ملاحظات',align:'right',wrap:true}];
+    cols[cols.length-1].w=tableW-cols.slice(0,-1).reduce((a,k)=>a+k.w,0);
+    const rows=students.map((st,i)=>{recalc(st);const g=st.grades||[];return [arabicDigits(i+1),st.name||'',...fields.map(fi=>gradeText(g[fi])),st.notes||'']});
+    if(!rows.length)rows.push(['','لا توجد أسماء طلاب.',...fields.map(()=>''),'']);
+    const meta=`المدرس: ${state.meta.teacher||''} | المادة: ${state.meta.subject||''} | المرحلة: ${stage.name}${c?.name?` | الشعبة: ${c.name}`:''}`;
+    const pages=ppFitTable({cols,rows,block:(x,y)=>ppHeadBlock(x,y,state.meta.school||'',meta)});
+    ppFinish(pages,'جدول-الدرجات');
+  }catch(e){console.error(e);toast('تعذّر تجهيز ملف الطباعة')}
+}
+async function ppPhotoPage(photo,d,pi,total,meta){
+  const pg=ppPage(false),x=pg.x;let y=PP.M;y+=ppHeadBlock(x,y,state.meta.school||'',meta);
+  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=photo.data});
+  const capH=80,maxW=PP.W-2*PP.M,maxH=PP.H-PP.M-y-capH,k=Math.min(maxW/img.width,maxH/img.height);
+  const w=img.width*k,h=img.height*k;x.drawImage(img,(PP.W-w)/2,y+10,w,h);
+  ppText(x,`صورة سجل الغياب — ${fmtDate(d)}${total>1?` (${arabicDigits(pi+1)})`:''}`,28,y+10+h+40,'center',PP.W/2,true);
+  return pg;
+}
+async function printAbsencePdf(dates){
+  toast('جارٍ تجهيز ملف الطباعة…');await new Promise(r=>setTimeout(r,80));
+  try{
+    const c=activeClass(),stage=activeStage(),pages=[],tableW=PP.W-2*PP.M;
+    for(const d of dates){
+      const rec=c.attendance?.[d]||{},rows=[];
+      c.students.forEach(s=>{if(rec[s.id]==='absent'||rec[s.id]==='excused')rows.push([arabicDigits(rows.length+1),(s.name||'')+(rec[s.id]==='excused'?' (مجاز)':''),rec[s.id]==='absent'?'غائب':'مجاز'])});
+      const meta=`تاريخ الغياب: ${fmtDate(d)} | المادة: ${state.meta.subject||''} | المرحلة: ${stage.name} | الشعبة: ${c.name||''}`;
+      const sub=`سجل الغياب — الغائبون فقط (${arabicDigits(rows.length)})`;
+      if(!rows.length)rows.push(['','لا توجد بيانات لهذا التاريخ.','']);
+      const cols=[{w:Math.round(tableW*.1),label:'ت',align:'center'},{w:Math.round(tableW*.6),label:'اسم الطالب',align:'right',bold:true,wrap:true},{w:0,label:'الحالة',align:'center'}];
+      cols[2].w=tableW-cols[0].w-cols[1].w;
+      pages.push(...ppFitTable({cols,rows,blockEvery:true,block:(x,y)=>ppHeadBlock(x,y,state.meta.school||'',meta,sub)}));
+      const photos=(c.recordPhotos||[]).filter(p=>p.date===d);
+      for(let pi=0;pi<photos.length;pi++)pages.push(await ppPhotoPage(photos[pi],d,pi,photos.length,meta));
+    }
+    ppFinish(pages,'سجل-الغياب');
+  }catch(e){console.error(e);toast('تعذّر تجهيز ملف الطباعة')}
+}
 
 // إزالة إعدادات الدخول السحابي القديمة محلياً؛ لا يؤثر ذلك في بيانات Firebase نفسها.
 localStorage.removeItem('teacherCloudSession');
