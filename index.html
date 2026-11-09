@@ -193,6 +193,7 @@ async function persistNow(){
 }
 function save(){
  state.updatedAt=Date.now();
+ if(cloud.cfg){cloud.dirty=true;cloudSchedule()}
  clearTimeout(persistTimer);persistTimer=setTimeout(()=>{persistTimer=null;persistNow()},250);
 }
 function flushSave(){if(persistTimer){clearTimeout(persistTimer);persistTimer=null;persistNow()}}
@@ -337,7 +338,7 @@ function renderDeletedGroups(){
  const table=(items,kind)=>items.length?`<div class="table-wrap"><table class="grade-table" style="min-width:650px"><thead><tr><th>ت</th><th>الاسم</th><th>المرحلة الأم</th><th>تاريخ الحذف</th><th>إجراء</th></tr></thead><tbody>${items.map((x,i)=>`<tr><td>${arabicDigits(i+1)}</td><td>${esc(x.name||x.stage?.name||x.class?.name||'')}</td><td>${esc(x.parentStageName||'—')}</td><td>${fmtDate(x.deletedAt||'')}</td><td><button class="btn green" data-restore-group="${x.id}">استرجاع</button> <button class="btn danger" data-purge-group="${x.id}">حذف نهائي</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">لا توجد عناصر محذوفة.</div>';
  return `<section class="panel"><div class="title-row"><div><div class="title">المراحل والشعب المحذوفة</div><div class="hint">يمكن استرجاع المرحلة مع شعبها وطلابها، أو استرجاع شعبة إلى مرحلتها. تُحفظ التغييرات على هذا الجهاز فقط.</div></div><div class="pill">${arabicDigits(list.length)} عنصر</div></div><h3>المراحل المحذوفة (${arabicDigits(stages.length)})</h3>${table(stages,'stage')}<h3 style="margin-top:18px">الشعب المحذوفة (${arabicDigits(classes.length)})</h3>${table(classes,'class')}</section>`;
 }
-function renderBackup(){return `<section class="panel"><div class="title-row"><div><div class="title">النسخ الاحتياطي</div><div class="hint">الحفظ المحلي يعمل بدون إنترنت، مع تصدير واستيراد ملف JSON كامل للحماية من فقدان البيانات.</div></div></div><div class="backup-actions"><button class="big-action" id="exportJson"><div class="ico">⬇️</div><h3>تصدير البيانات</h3><div class="hint">ملف JSON كامل</div></button><button class="big-action" id="importJsonBtn"><div class="ico">⬆️</div><h3>استيراد ملف سابق</h3><div class="hint">استرجاع نسخة محفوظة</div></button><input id="importJson" type="file" accept="application/json,.json" class="hidden"><button class="big-action" id="downloadBackup"><div class="ico">💾</div><h3>حفظ نسخة للهاتف</h3><div class="hint">يفتح قائمة الحفظ/المشاركة عند دعم الجهاز</div></button><button class="big-action" id="resetData"><div class="ico">🧹</div><h3>مسح البيانات</h3><div class="hint">يتطلب تأكيدين</div></button></div><div class="notice warn" style="margin-top:14px">ملاحظة مهمة: المتصفح لا يستطيع ضمان بقاء ملف خارج المتصفح تلقائياً بعد حذف بيانات الموقع. استخدم «حفظ نسخة للهاتف» بشكل دوري، ثم استوردها عند الحاجة.</div></section>`}
+function renderBackup(){return cloudPanelHtml()+`<section class="panel"><div class="title-row"><div><div class="title">النسخ الاحتياطي</div><div class="hint">الحفظ المحلي يعمل بدون إنترنت، مع تصدير واستيراد ملف JSON كامل للحماية من فقدان البيانات.</div></div></div><div class="backup-actions"><button class="big-action" id="exportJson"><div class="ico">⬇️</div><h3>تصدير البيانات</h3><div class="hint">ملف JSON كامل</div></button><button class="big-action" id="importJsonBtn"><div class="ico">⬆️</div><h3>استيراد ملف سابق</h3><div class="hint">يستبدل بيانات هذا الجهاز بالكامل</div></button><input id="importJson" type="file" accept="application/json,.json" class="hidden"><button class="big-action" id="mergeJsonBtn"><div class="ico">🔀</div><h3>دمج نسخة من جهاز آخر</h3><div class="hint">يضيف الجديد ويحتفظ بالموجود</div></button><input id="mergeJson" type="file" accept="application/json,.json" class="hidden"><button class="big-action" id="undoMerge"><div class="ico">↩️</div><h3>التراجع عن آخر دمج</h3><div class="hint">يرجع البيانات لما قبل الدمج</div></button><button class="big-action" id="downloadBackup"><div class="ico">💾</div><h3>حفظ نسخة للهاتف</h3><div class="hint">يفتح قائمة الحفظ/المشاركة عند دعم الجهاز</div></button><button class="big-action" id="resetData"><div class="ico">🧹</div><h3>مسح البيانات</h3><div class="hint">يتطلب تأكيدين</div></button></div><div class="notice warn" style="margin-top:14px">ملاحظة مهمة: المتصفح لا يستطيع ضمان بقاء ملف خارج المتصفح تلقائياً بعد حذف بيانات الموقع. استخدم «حفظ نسخة للهاتف» بشكل دوري، ثم استوردها عند الحاجة.</div></section>`}
 
 
 function bind(){
@@ -523,9 +524,21 @@ function bindBackup(){
  $('#downloadBackup')?.addEventListener('click',downloadFullBackup);
  $('#importJsonBtn')?.addEventListener('click',()=>$('#importJson').click());
  $('#importJson')?.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{const txt=await f.text();const obj=JSON.parse(txt);if(!obj?.stages)throw new Error('الملف ليس نسخة من سجل المدرس');if(!await confirmAction('سيتم استبدال البيانات الحالية بالنسخة المستوردة. متابعة؟'))return;state=obj;normalizeState();save(false);toast('تم استيراد النسخة بنجاح');render()}catch(err){alert('فشل الاستيراد: '+err.message)}e.target.value=''});
+ $('#cloudSetup')?.addEventListener('click',cloudSetupModal);$('#cloudNow')?.addEventListener('click',()=>{if(!navigator.onLine){toast('لا يوجد اتصال بالإنترنت');return}cloud.dirty=true;cloudSync('manual')});$('#cloudCode')?.addEventListener('click',cloudCodeModal);$('#cloudOff')?.addEventListener('click',cloudOff);
+ $('#mergeJsonBtn')?.addEventListener('click',()=>$('#mergeJson').click());
+ $('#mergeJson')?.addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{
+  const obj=JSON.parse(await f.text());if(!obj||!Array.isArray(obj.stages))throw new Error('الملف ليس نسخة من سجل المدرس');
+  const inc=normalizeObj(obj);const common=countCommonIds(state,inc);
+  const msg=common?'سيتم دمج النسخة مع بياناتك الحالية: إضافة الجديد وتحديث الموجود بدون حذف شيء. متابعة؟':'هذه النسخة لا تشترك مع سجلك الحالي بأي مرحلة أو شعبة أو طالب، أي أنها ليست من نفس السجل. سيتم إضافتها كمراحل وشعب جديدة وقد تتكرر الأسماء. هل تريد المتابعة؟';
+  if(!await confirmAction(msg)){e.target.value='';return}
+  if(idbOk){try{await idbSet('preMergeBackup',{at:Date.now(),state:jclone(state)})}catch(err){}}
+  const {result,rep}=mergeStates(state,inc);state=result;normalizeState();save(false);render();
+  confirmModal('تم الدمج',`<div class="notice"><div>طلاب جدد: <b>${arabicDigits(rep.newStudents)}</b></div><div>طلاب تم تحديث بياناتهم: <b>${arabicDigits(rep.mergedStudents)}</b></div><div>شعب جديدة: <b>${arabicDigits(rep.newClasses)}</b></div><div>سجلات حضور مضافة/محدّثة: <b>${arabicDigits(rep.attendance)}</b></div><div>طلاب طُبّق حذفهم: <b>${arabicDigits(rep.removed)}</b></div></div><div class="hint" style="margin-top:8px">إذا لم تكن النتيجة كما تريد، استخدم «التراجع عن آخر دمج».</div>`,[{text:'تمام',kind:'primary'}])
+ }catch(err){alert('فشل الدمج: '+err.message)}e.target.value=''});
+ $('#undoMerge')?.addEventListener('click',async()=>{let snap=null;try{snap=await idbGet('preMergeBackup')}catch(err){}if(!snap||!snap.state){toast('لا توجد نسخة للتراجع عنها');return}if(!await confirmAction('سيتم إرجاع بياناتك إلى ما قبل آخر دمج، وأي تعديل بعده سيضيع. متابعة؟'))return;state=snap.state;normalizeState();save(false);render();toast('تم التراجع عن الدمج')});
  $('#resetData')?.addEventListener('click',async()=>{if(await confirmAction('سيتم مسح جميع بيانات السجل من هذا المتصفح. هل أنت متأكد؟')&&await confirmAction('تأكيد نهائي: لا يمكن التراجع عن المسح.')){localStorage.removeItem(STORAGE_KEY);state=makeDefault();save(false);render()}})
 }
-async function downloadFullBackup(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const name=`سجل-المدرس-${todayISO()}.json`;if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'JSON',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(blob);await w.close();toast('تم حفظ النسخة في المكان الذي اخترته');return}catch(e){if(e.name==='AbortError')return}}
+async function downloadFullBackup(){const blob=new Blob([JSON.stringify(state)],{type:'application/json'});const name=`سجل-المدرس-${todayISO()}.json`;if(usePdfPrint()&&navigator.canShare){try{const f=new File([blob],name,{type:'application/json'});if(navigator.canShare({files:[f]})){await navigator.share({files:[f],title:name});toast('تم تجهيز النسخة');return}}catch(e){if(e&&e.name==='AbortError')return}}if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:'JSON',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(blob);await w.close();toast('تم حفظ النسخة في المكان الذي اخترته');return}catch(e){if(e.name==='AbortError')return}}
 const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);toast('تم تنزيل ملف النسخة الاحتياطية')}
 
 function printCustomize(){const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];confirmModal('تخصيص الطباعة',`<div class="grid" id="printFields">${labels.map((l,i)=>`<label class="data-item"><input type="checkbox" checked data-print-field="${i}"> ${l}</label>`).join('')}</div><div class="notice">سيتم طباعة الأسماء والتسلسل دائماً، مع إضافة حقل الملاحظات في نهاية الجدول. لن تطبع أزرار البرنامج.</div>`,[{text:'طباعة',kind:'primary',fn:()=>{const selected=$$('[data-print-field]:checked').map(x=>Number(x.dataset.printField));doPrintColumns(selected)}},{text:'إلغاء',kind:'soft'}])}
@@ -720,10 +733,285 @@ async function printAbsencePdf(dates){
   }catch(e){console.error(e);toast('تعذّر تجهيز ملف الطباعة')}
 }
 
+// ===== دمج نسخة من جهاز آخر (إضافة الجديد وتحديث الموجود بدون حذف) =====
+function jclone(o){return JSON.parse(JSON.stringify(o))}
+function normalizeObj(o){const keep=state;state=o;normalizeState();const r=state;state=keep;return r}
+function unionBy(a,b,keyFn){const out=[],seen=new Set();[...(a||[]),...(b||[])].forEach(x=>{const k=keyFn(x);if(!seen.has(k)){seen.add(k);out.push(x)}});return out}
+const evKey=x=>typeof x==='string'?x:JSON.stringify(x);
+const idKey=x=>(x&&x.id)?String(x.id):JSON.stringify(x);
+function countCommonIds(L,I){const ids=new Set();L.stages.forEach(s=>{ids.add('s'+s.id);s.classes.forEach(c=>{ids.add('c'+c.id);c.students.forEach(t=>ids.add('t'+t.id))})});let n=0;I.stages.forEach(s=>{if(ids.has('s'+s.id))n++;s.classes.forEach(c=>{if(ids.has('c'+c.id))n++;c.students.forEach(t=>{if(ids.has('t'+t.id))n++})})});return n}
+function mergeStudent(a,b,incWins){
+  if(!a.name&&b.name)a.name=b.name;else if(incWins&&b.name&&a.name!==b.name)a.name=b.name;
+  if(!a.photo&&b.photo)a.photo=b.photo;else if(incWins&&b.photo&&a.photo!==b.photo)a.photo=b.photo;
+  if(a.notes!==b.notes){if(!a.notes)a.notes=b.notes;else if(b.notes&&incWins)a.notes=b.notes}
+  for(let i=0;i<12;i++){const x=a.grades[i],y=b.grades[i];if(y!=null&&(x==null||(incWins&&x!==y)))a.grades[i]=y}
+  a.events=a.events||{};b.events=b.events||{};
+  ['absent','misbehave','unprepared'].forEach(k=>{a.events[k]=unionBy(a.events[k],b.events[k],evKey)});
+  const sm=new Map();(a.summons||[]).forEach(x=>sm.set(idKey(x),x));(b.summons||[]).forEach(x=>{const k=idKey(x);if(sm.has(k)){const y=sm.get(k);y.resolved=!!(y.resolved||x.resolved)}else sm.set(k,x)});a.summons=[...sm.values()];
+  a.parentVisits=unionBy(a.parentVisits,b.parentVisits,idKey);
+  a.dailyMarks=a.dailyMarks||{};b.dailyMarks=b.dailyMarks||{};
+  ['f1','f2'].forEach(sem=>{a.dailyMarks[sem]=a.dailyMarks[sem]||{};['oral1','oral2'].forEach(k=>{a.dailyMarks[sem][k]=unionBy(a.dailyMarks[sem][k],(b.dailyMarks[sem]||{})[k],idKey)})});
+  a.manualOral=incWins?Object.assign({},a.manualOral||{},b.manualOral||{}):Object.assign({},b.manualOral||{},a.manualOral||{});
+  Object.keys(b).forEach(k=>{if(!(k in a))a[k]=b[k]});
+}
+function mergeStates(L,I){
+  const R=jclone(L),inc=jclone(I);
+  const incWins=(Number(I.updatedAt)||0)>(Number(L.updatedAt)||0);
+  const rep={newStudents:0,mergedStudents:0,newClasses:0,attendance:0,removed:0};
+  // بيانات المدرسة: نأخذ من النسخة الواردة فقط ما كان فارغاً أو افتراضياً عندنا
+  const defs={school:'اسم المدرسة',teacher:'اسم المدرس',subject:'اسم المادة',logo:''};
+  Object.keys(defs).forEach(k=>{if((!R.meta[k]||R.meta[k]===defs[k])&&inc.meta[k]&&inc.meta[k]!==defs[k])R.meta[k]=inc.meta[k]});
+  // سجلات الحياة (الحذف/الاسترجاع): الأحدث يفوز
+  ['studentLifecycle','stageLifecycle','classLifecycle','parentRecordLifecycle'].forEach(m=>{R[m]=R[m]||{};Object.keys(inc[m]||{}).forEach(k=>{const a=R[m][k],b=inc[m][k];if(!a||(b.updatedAt||0)>(a.updatedAt||0))R[m][k]=b})});
+  R.deletedGroups=unionBy(R.deletedGroups,inc.deletedGroups,idKey);
+  R.parentRecords=unionBy(R.parentRecords,inc.parentRecords,idKey);
+  // المراحل والشعب والطلاب
+  const touched=[];
+  inc.stages.forEach(is=>{
+    const rs=R.stages.find(s=>s.id===is.id);
+    if(!rs){R.stages.push(is);is.classes.forEach(c=>{rep.newClasses++;rep.newStudents+=c.students.length;touched.push(c)});return}
+    is.classes.forEach(ic=>{
+      const rc=rs.classes.find(c=>c.id===ic.id);
+      if(!rc){rs.classes.push(ic);rep.newClasses++;rep.newStudents+=ic.students.length;touched.push(ic);return}
+      touched.push(rc);
+      Object.keys(ic.attendance||{}).forEach(d=>{const ra=rc.attendance[d]=rc.attendance[d]||{};Object.entries(ic.attendance[d]||{}).forEach(([sid,v])=>{if(!(sid in ra)){ra[sid]=v;rep.attendance++}else if(incWins&&ra[sid]!==v){ra[sid]=v;rep.attendance++}})});
+      const pk=p=>p.id?String(p.id):p.date+':'+String((p.data||'').length);
+      rc.recordPhotos=unionBy(rc.recordPhotos,ic.recordPhotos,pk);
+      ic.students.forEach(it=>{const rt=rc.students.find(t=>t.id===it.id);if(!rt){rc.students.push(it);rep.newStudents++}else{mergeStudent(rt,it,incWins);rep.mergedStudents++}});
+    });
+  });
+  // الطلاب المحذوفون: نطبّق الأحدث
+  const arch=new Map();R.deletedStudents.forEach(x=>arch.set(String(x.student&&x.student.id),x));
+  (inc.deletedStudents||[]).forEach(x=>{const k=String(x.student&&x.student.id);if(!arch.has(k)){R.deletedStudents.push(x);arch.set(k,x)}});
+  Object.entries(R.studentLifecycle).forEach(([id,lc])=>{
+    if(lc.status==='deleted'||lc.status==='purged'){
+      R.stages.forEach(s=>s.classes.forEach(c=>{const ix=c.students.findIndex(t=>String(t.id)===id);if(ix<0)return;const stu=c.students[ix];
+        if(lc.status==='deleted'&&!arch.has(id)){const a={id:uid('del'),student:jclone(stu),stageName:s.name,className:c.name||'',attendanceHistory:{},deletedAt:todayISO()};R.deletedStudents.push(a);arch.set(id,a)}
+        c.students.splice(ix,1);Object.keys(c.attendance||{}).forEach(d=>{if(c.attendance[d])delete c.attendance[d][id]});rep.removed++}));
+      if(lc.status==='purged')R.deletedStudents=R.deletedStudents.filter(x=>String(x.student&&x.student.id)!==id);
+    }else if(lc.status==='active'){R.deletedStudents=R.deletedStudents.filter(x=>String(x.student&&x.student.id)!==id)}
+  });
+  // مواءمة الغياب مع سجل الحضور بعد الدمج، وإعادة حساب المعدلات، وترتيب الأسماء
+  R.stages.forEach(s=>s.classes.forEach(c=>{
+    c.students.forEach(st=>{
+      const abs=new Set((st.events.absent||[]).filter(d=>{const v=c.attendance&&c.attendance[d]&&c.attendance[d][st.id];return v===undefined||v==='absent'}));
+      Object.keys(c.attendance||{}).forEach(d=>{if(c.attendance[d]&&c.attendance[d][st.id]==='absent')abs.add(d)});
+      st.events.absent=[...abs].sort();recalc(st)});
+    sortStudents(c)}));
+  R.updatedAt=Math.max(Number(L.updatedAt)||0,Number(I.updatedAt)||0);
+  return {result:R,rep};
+}
+
+// ===== المزامنة السحابية المشفّرة (Firebase Realtime Database عبر REST) =====
+// كل شيء يُشفَّر على الجهاز (AES-GCM) قبل الرفع، وكلمة السر لا تغادر الجهاز.
+var cloud={cfg:null,busy:false,status:'',timer:null,dirty:false,pendingRender:false};
+const cSleep=ms=>new Promise(r=>setTimeout(r,ms));
+function b64enc(u8){let s='';for(let i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function b64dec(str){const bin=atob(str),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
+function codeEnc(o){return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function codeDec(s){s=String(s||'').trim().replace(/\s+/g,'').replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';return JSON.parse(decodeURIComponent(escape(atob(s))))}
+function randStr(n){const a='abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789',r=crypto.getRandomValues(new Uint8Array(n));let s='';for(let i=0;i<n;i++)s+=a[r[i]%a.length];return s}
+async function deriveKey(pass,saltB64){const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pass),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64dec(saltB64),iterations:250000,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function gzip(u8,mode){const cs=new (mode==='compress'?CompressionStream:DecompressionStream)('gzip');const w=cs.writable.getWriter();w.write(u8);w.close();return new Uint8Array(await new Response(cs.readable).arrayBuffer())}
+async function encryptText(text,key){
+  let data=new TextEncoder().encode(text),flag=0;
+  if(typeof CompressionStream!=='undefined'){try{data=await gzip(data,'compress');flag=1}catch(e){}}
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,data));
+  const out=new Uint8Array(13+ct.length);out[0]=flag;out.set(iv,1);out.set(ct,13);return b64enc(out)}
+async function encryptJson(obj,key){return encryptText(JSON.stringify(obj),key)}
+// الصور تُرفع مرة واحدة كملفات مستقلة (باسم بصمتها)، والبيانات الخفيفة تشير إليها فقط
+async function sha32(str){const d=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)));let h='';for(let i=0;i<16;i++)h+=d[i].toString(16).padStart(2,'0');return h}
+function isBigImg(v){return typeof v==='string'&&v.length>2000&&v.startsWith('data:image/')}
+function collectImages(o,out){if(typeof o==='string'){if(isBigImg(o))out.add(o)}else if(Array.isArray(o)){for(const x of o)collectImages(x,out)}else if(o&&typeof o==='object'){for(const k in o)collectImages(o[k],out)}}
+const REF=/^blob:[0-9a-f]{32}$/;
+function mapRefs(o,fn){if(Array.isArray(o)){for(let i=0;i<o.length;i++){const v=o[i];if(typeof v==='string'){if(REF.test(v))o[i]=fn(v.slice(5))}else mapRefs(v,fn)}}else if(o&&typeof o==='object'){for(const k in o){const v=o[k];if(typeof v==='string'){if(REF.test(v))o[k]=fn(v.slice(5))}else mapRefs(v,fn)}}}
+async function encryptImage(u,key){
+  const i=u.indexOf(';base64,'),mime=new TextEncoder().encode(u.slice(5,i)),img=b64dec(u.slice(i+8));
+  const pt=new Uint8Array(1+mime.length+img.length);pt[0]=mime.length;pt.set(mime,1);pt.set(img,1+mime.length);
+  const iv=crypto.getRandomValues(new Uint8Array(12));const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,pt));
+  const out=new Uint8Array(13+ct.length);out[0]=0;out.set(iv,1);out.set(ct,13);return b64enc(out)}
+async function decryptImage(b64,key){
+  const u=b64dec(b64),pt=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.subarray(1,13)},key,u.subarray(13))),ml=pt[0];
+  return 'data:'+new TextDecoder().decode(pt.subarray(1,1+ml))+';base64,'+b64enc(pt.subarray(1+ml))}
+async function decryptJson(b64,key){
+  const u=b64dec(b64);let data=new Uint8Array(await crypto.subtle.decrypt({name:'AES-GCM',iv:u.subarray(1,13)},key,u.subarray(13)));
+  if(u[0]===1)data=await gzip(data,'decompress');
+  return JSON.parse(new TextDecoder().decode(data))}
+function fpState(s){const t=JSON.stringify(Object.assign({},s,{updatedAt:0}));let h1=0xdeadbeef,h2=0x41c6ce57;for(let i=0;i<t.length;i++){const c=t.charCodeAt(i);h1=Math.imul(h1^c,2654435761);h2=Math.imul(h2^c,1597334677)}h1=Math.imul(h1^(h1>>>16),2246822507)^Math.imul(h2^(h2>>>13),3266489909);h2=Math.imul(h2^(h2>>>16),2246822507)^Math.imul(h1^(h1>>>13),3266489909);return (4294967296*(2097151&h2)+(h1>>>0)).toString(36)+':'+t.length}
+async function fb(method,path,body,cfg,query){
+  const c=cfg||cloud.cfg;
+  const r=await fetch(`${c.url}/sync/${c.key}/${path}.json${query||''}`,{method,headers:body!==undefined?{'Content-Type':'application/json'}:undefined,body:body!==undefined?JSON.stringify(body):undefined,cache:'no-store'});
+  if(!r.ok){const e=new Error('HTTP '+r.status);e.status=r.status;throw e}
+  return r.status===204?null:r.json()}
+function cloudExplain(e){
+  if(e&&e.status===401||e&&e.status===403)return 'رفضت قاعدة البيانات الاتصال. تأكد من نشر القواعد (Rules) كما في الخطوات.';
+  if(e&&e.status===404)return 'الرابط غير صحيح.';
+  if(e&&e.name==='OperationError')return 'كلمة السر غير صحيحة.';
+  if(e&&e.name==='TypeError')return 'تعذّر الاتصال. تأكد من الإنترنت ومن صحة الرابط.';
+  return 'خطأ: '+((e&&e.message)||e);
+}
+function cloudStatus(msg){cloud.status=msg;const el=document.getElementById('cloudStatus');if(el)el.textContent=msg}
+function cloudSchedule(){clearTimeout(cloud.timer);cloud.timer=setTimeout(()=>cloudSync('change'),6000)}
+// الصور تُرفع/تُنزَّل منفصلة (مرة واحدة لكل صورة)، والباقي (نص خفيف) يُنزَّل كاملاً
+async function photoHash(str){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));return Array.from(new Uint8Array(d).subarray(0,16)).map(x=>x.toString(16).padStart(2,'0')).join('')}
+function isPhotoStr(v){return typeof v==='string'&&v.length>2000&&v.startsWith('data:image/')}
+function collectPhotoStrings(v,set){if(isPhotoStr(v))set.add(v);else if(Array.isArray(v))v.forEach(x=>collectPhotoStrings(x,set));else if(v&&typeof v==='object')Object.keys(v).forEach(k=>collectPhotoStrings(v[k],set));return set}
+function mapPhotos(v,fn){if(typeof v==='string'){return fn(v)}if(Array.isArray(v))return v.map(x=>mapPhotos(x,fn));if(v&&typeof v==='object'){const r={};Object.keys(v).forEach(k=>{r[k]=mapPhotos(v[k],fn)});return r}return v}
+async function splitPhotos(obj){
+  const strs=[...collectPhotoStrings(obj,new Set())],byStr=new Map(),photos=new Map();
+  for(const t of strs){const h=await photoHash(t);byStr.set(t,h);photos.set(h,t)}
+  return {core:mapPhotos(obj,t=>isPhotoStr(t)?'@ph:'+byStr.get(t):t),photos}}
+function collectRefs(v,set){if(typeof v==='string'){if(v.startsWith('@ph:'))set.add(v.slice(4))}else if(Array.isArray(v))v.forEach(x=>collectRefs(x,set));else if(v&&typeof v==='object')Object.keys(v).forEach(k=>collectRefs(v[k],set));return set}
+async function cloudResolveBlobs(obj,cfg){
+  const need=new Set();mapRefs(obj,h=>{need.add(h);return 'blob:'+h});
+  if(!need.size)return;
+  const have=new Map(),imgs=new Set();collectImages(state,imgs);
+  await Promise.all([...imgs].map(async u=>{have.set(await sha32(u),u)}));
+  const toGet=[...need].filter(h=>!have.has(h)),total=toGet.length;let done=0;
+  const worker=async()=>{while(toGet.length){const h=toGet.pop();let t=0;for(;;){try{const v=await fb('GET',`b/${h}`,undefined,cfg);if(typeof v!=='string')throw new Error('blob');have.set(h,await decryptImage(v,cfg.aes));break}catch(e){if(++t>=3)throw e;await cSleep(700*t)}}done++;cloudStatus(`جارٍ تنزيل الصور… ${arabicDigits(done)}/${arabicDigits(total)}`)}};
+  await Promise.all([worker(),worker(),worker(),worker()]);
+  mapRefs(obj,h=>have.get(h)||'')}
+async function cloudPull(meta,cfg){
+  let b64='';for(let i=0;i<meta.n;i++){let t=0;for(;;){try{const part=await fb('GET',`v/${meta.rev}/${i}`,undefined,cfg);if(typeof part!=='string')throw new Error('chunk');b64+=part;break}catch(e){if(++t>=3)throw e;await cSleep(700*t)}}cloudStatus(`جارٍ تنزيل البيانات… ${arabicDigits(i+1)}/${arabicDigits(meta.n)}`)}
+  const light=await decryptJson(b64,cfg.aes);
+  await cloudResolveBlobs(light,cfg);
+  return normalizeObj(light)}
+// حذف الصور غير المستخدمة من السحابة بعد مهلة أمان (حتى لا تضيع صورة يستعملها جهاز آخر لحظة المزامنة)
+const GC_GRACE=2*3600*1000;
+async function cloudGc(cfg,refs){
+  const onServer=Object.keys((await fb('GET','b',undefined,cfg,'?shallow=true'))||{});
+  const marks=(await fb('GET','gc',undefined,cfg))||{};
+  const now=Date.now(),keep={};
+  for(const h of onServer){
+    if(refs.has(h))continue;
+    const t=marks[h];
+    if(!t)keep[h]=now;
+    else if(now-t>GC_GRACE)await fb('DELETE',`b/${h}`,undefined,cfg);
+    else keep[h]=t;
+  }
+  await fb('PUT','gc',keep,cfg);
+  cfg.lastGc=now;await idbSet('cloudCfg',cfg);
+}
+async function cloudDocRefs(meta,cfg){
+  let b64='';for(let i=0;i<meta.n;i++){const part=await fb('GET',`v/${meta.rev}/${i}`,undefined,cfg);if(typeof part!=='string')throw new Error('chunk');b64+=part}
+  const light=await decryptJson(b64,cfg.aes),refs=new Set();mapRefs(light,h=>{refs.add(h);return 'blob:'+h});return refs}
+async function cloudPush(cfg){
+  cloudStatus('جارٍ تجهيز البيانات…');
+  const imgs=new Set();collectImages(state,imgs);const map=new Map();
+  await Promise.all([...imgs].map(async u=>map.set(u,await sha32(u))));
+  const onServer=new Set(Object.keys((await fb('GET','b',undefined,cfg,'?shallow=true'))||{}));
+  const todo=new Map();map.forEach((h,u)=>{if(!onServer.has(h)&&!todo.has(h))todo.set(h,u)});
+  let up=0;const total=todo.size;
+  for(const [h,u] of todo){let t=0;for(;;){try{await fb('PUT',`b/${h}`,await encryptImage(u,cfg.aes),cfg);break}catch(e){if(++t>=3)throw e;await cSleep(800*t)}}up++;cloudStatus(`جارٍ رفع الصور… ${arabicDigits(up)}/${arabicDigits(total)}`)}
+  const light=JSON.stringify(state,(k,v)=>(typeof v==='string'&&map.has(v))?'blob:'+map.get(v):v);
+  cloudStatus('جارٍ تشفير البيانات…');
+  const b64=await encryptText(light,cfg.aes),CH=1500000,n=Math.max(1,Math.ceil(b64.length/CH)),rev=Date.now().toString(36)+randStr(5);
+  for(let i=0;i<n;i++){let t=0;for(;;){try{await fb('PUT',`v/${rev}/${i}`,b64.slice(i*CH,(i+1)*CH),cfg);break}catch(e){if(++t>=3)throw e;await cSleep(800*t)}}cloudStatus(`جارٍ رفع البيانات… ${arabicDigits(i+1)}/${arabicDigits(n)}`)}
+  await fb('PUT','meta',{rev,n,size:b64.length,at:Date.now(),by:cfg.deviceId},cfg);
+  cfg.lastRev=rev;await idbSet('cloudCfg',cfg);
+  try{const keys=await fb('GET','v',undefined,cfg,'?shallow=true');for(const k of Object.keys(keys||{}))if(k!==rev)await fb('DELETE',`v/${k}`,undefined,cfg)}catch(e){}
+  try{await cloudGc(cfg,new Set(map.values()))}catch(e){}
+}
+function cloudApply(){
+  currentStage=Math.min(currentStage,state.stages.length-1);if(currentStage<0)currentStage=0;
+  if(currentClass>=(activeStage().classes||[]).length)currentClass=(activeStage().classes||[]).length?0:-1;
+  const a=document.activeElement;if(a&&['INPUT','TEXTAREA','SELECT'].includes(a.tagName))cloud.pendingRender=true;else render();
+}
+async function cloudSync(reason){
+  if(!cloud.cfg||cloud.busy||!state)return;
+  if(!navigator.onLine){if(cloud.dirty)cloudStatus('بانتظار الإنترنت… التغييرات محفوظة على الجهاز وسترتفع تلقائياً.');return}
+  cloud.busy=true;const wasDirty=cloud.dirty;cloud.dirty=false;
+  try{
+    const cfg=cloud.cfg;cloudStatus('جارٍ المزامنة…');
+    const meta=await fb('GET','meta');
+    let needPush=wasDirty||!meta;
+    if(meta&&meta.rev!==cfg.lastRev){
+      const remote=await cloudPull(meta,cfg);
+      const before=fpState(state);
+      const res=mergeStates(state,remote);state=res.result;normalizeState();
+      const after=fpState(state);
+      if(after!==fpState(remote))needPush=true;
+      if(after!==before){await persistNow();cloudApply()}
+      cfg.lastRev=meta.rev;await idbSet('cloudCfg',cfg);
+    }
+    if(needPush)await cloudPush(cfg);
+    else if(!wasDirty&&Date.now()-(cfg.lastGc||0)>6*3600*1000){try{const m2=meta&&meta.rev===cfg.lastRev?meta:await fb('GET','meta');if(m2)await cloudGc(cfg,await cloudDocRefs(m2,cfg))}catch(e){}}
+    cloudStatus('✓ آخر مزامنة: '+new Date().toLocaleTimeString('ar-IQ',{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){cloud.dirty=cloud.dirty||wasDirty;cloudStatus('تعذّرت المزامنة: '+cloudExplain(e))}
+  cloud.busy=false;
+}
+async function cloudActivate(cfg){
+  // اختبار الكتابة (للتأكد من القواعد)
+  await fb('PUT','ping',{t:Date.now()},cfg);
+  const meta=await fb('GET','meta',undefined,cfg);
+  if(meta){
+    const remote=await cloudPull(meta,cfg); // يفشل بخطأ OperationError إذا كلمة السر غير صحيحة
+    const hasLocal=state.stages.some(s=>s.classes.some(c=>c.students.length));
+    if(!hasLocal){state=remote;await persistNow();cloudApply()}
+    else if(!countCommonIds(state,remote)){
+      if(await confirmAction('بيانات هذا الجهاز ليست من نفس سجل السحابة.\n\nموافق = استبدال بيانات هذا الجهاز ببيانات السحابة (تُحفظ نسخة منها قبل ذلك للتراجع).\nإلغاء = دمجها كمراحل وشعب جديدة.')){
+        try{await idbSet('preMergeBackup',{at:Date.now(),state:jclone(state)})}catch(e){}
+        state=remote;await persistNow();cloudApply()}
+    }
+  }
+  cloud.cfg=cfg;cloud.dirty=true;await idbSet('cloudCfg',cfg);
+}
+function cloudCodeModal(){
+  const cfg=cloud.cfg;if(!cfg)return;
+  confirmModal('رمز الربط',`<div class="notice">انسخ هذا الرمز وأرسله لنفسك (واتساب مثلاً)، ثم أدخله في الجهاز الثاني مع <b>نفس كلمة السر</b>. لا ترسل كلمة السر مع الرمز.</div><textarea id="cloudCodeBox" readonly style="width:100%;height:110px;margin-top:8px;direction:ltr;font-size:.8rem">${esc(cfg.code)}</textarea>`,[
+    {text:'📋 نسخ الرمز',kind:'primary',fn:async()=>{const t=cfg.code;try{await navigator.clipboard.writeText(t);toast('تم النسخ')}catch(e){const b=document.getElementById('cloudCodeBox');b.select();document.execCommand('copy');toast('تم النسخ')}}},
+    {text:'إغلاق',kind:'soft',fn:()=>closeModal()}],false)}
+function cloudSetupModal(){
+  confirmModal('إعداد المزامنة السحابية','<div class="notice">اختر: هل هذا أول جهاز تربطه، أم تريد ربط جهاز ثاني بسجل موجود؟</div>',[
+    {text:'هذا أول جهاز',kind:'primary',fn:()=>cloudFormModal(false)},
+    {text:'ربط جهاز ثاني',kind:'soft',fn:()=>cloudFormModal(true)},
+    {text:'إلغاء',kind:'soft',fn:()=>closeModal()}],false)}
+function cloudFormModal(link){
+  const html=link?
+   `<label class="hint">رمز الربط (من الجهاز الأول)</label><textarea id="cfCode" style="width:100%;height:90px;direction:ltr;font-size:.8rem"></textarea><label class="hint" style="margin-top:8px;display:block">كلمة سر التشفير (نفسها)</label><input id="cfPass" type="password" style="width:100%">`:
+   `<label class="hint">رابط قاعدة البيانات (Realtime Database)</label><input id="cfUrl" type="url" placeholder="https://…firebasedatabase.app" style="width:100%;direction:ltr"><label class="hint" style="margin-top:8px;display:block">كلمة سر التشفير (8 أحرف فأكثر، لا تنساها)</label><input id="cfPass" type="password" style="width:100%"><label class="hint" style="margin-top:8px;display:block">أعد كتابة كلمة السر</label><input id="cfPass2" type="password" style="width:100%">`;
+  confirmModal(link?'ربط جهاز ثاني':'أول جهاز',html+'<div class="hint" id="cfMsg" style="margin-top:8px;color:#b42318"></div>',[
+    {text:'بدء المزامنة',kind:'primary',fn:async()=>{
+      const msg=t=>{const m=document.getElementById('cfMsg');if(m)m.textContent=t};
+      try{
+        const pass=document.getElementById('cfPass').value;let cfg;
+        if(pass.length<8){msg('كلمة السر قصيرة (8 أحرف على الأقل).');return}
+        if(link){let c;try{c=codeDec(document.getElementById('cfCode').value);if(!c.u||!c.k||!c.s)throw 0}catch(e){msg('رمز الربط غير صحيح.');return}
+          cfg={url:c.u,key:c.k,salt:c.s}}
+        else{
+          if(pass!==document.getElementById('cfPass2').value){msg('كلمتا السر غير متطابقتين.');return}
+          let u;try{u=new URL(document.getElementById('cfUrl').value.trim()).origin}catch(e){msg('الرابط غير صحيح.');return}
+          cfg={url:u,key:randStr(28),salt:b64enc(crypto.getRandomValues(new Uint8Array(16)))}}
+        msg('جارٍ الاتصال…');
+        cfg.aes=await deriveKey(pass,cfg.salt);cfg.deviceId=randStr(8);cfg.lastRev='';cfg.code=codeEnc({v:1,u:cfg.url,k:cfg.key,s:cfg.salt});
+        await cloudActivate(cfg);
+        closeModal();cloudStatus('جارٍ المزامنة…');render();
+        await cloudSync('setup');
+        if(!link)cloudCodeModal();else toast('تم الربط');
+      }catch(e){msg(cloudExplain(e))}
+    }},
+    {text:'إلغاء',kind:'soft',fn:()=>closeModal()}],false)}
+async function cloudOff(){
+  if(!await confirmAction('سيتوقف رفع وتنزيل البيانات على هذا الجهاز. بياناتك تبقى على الجهاز وعلى السحابة. متابعة؟'))return;
+  try{await idbSet('cloudCfg',null)}catch(e){}
+  cloud.cfg=null;cloudStatus('غير مفعّلة');render();toast('تم إيقاف المزامنة')}
+function cloudPanelHtml(){
+  const on=!!cloud.cfg;
+  return `<section class="panel"><div class="title-row"><div><div class="title">☁️ المزامنة السحابية المشفّرة</div><div class="hint">تزامن بياناتك تلقائياً بين أجهزتك عند توفر الإنترنت. تُشفَّر البيانات على جهازك بكلمة سر لا تغادره، فلا يستطيع أحد قراءتها حتى الخدمة السحابية. والتطبيق يبقى يعمل بدون إنترنت.</div></div></div><div class="notice" id="cloudStatus" style="margin:10px 0">${esc(on?(cloud.status||'مفعّلة'):'غير مفعّلة')}</div><div class="backup-actions">${on?`<button class="big-action" id="cloudNow"><div class="ico">🔄</div><h3>مزامنة الآن</h3><div class="hint">رفع وتنزيل التغييرات</div></button><button class="big-action" id="cloudCode"><div class="ico">🔗</div><h3>رمز الربط</h3><div class="hint">لإضافة جهاز جديد</div></button><button class="big-action" id="cloudOff"><div class="ico">⏹️</div><h3>إيقاف المزامنة</h3><div class="hint">البيانات تبقى على الجهاز</div></button>`:`<button class="big-action" id="cloudSetup"><div class="ico">☁️</div><h3>إعداد المزامنة</h3><div class="hint">أول جهاز أو ربط جهاز ثاني</div></button>`}</div></section>`}
+async function cloudInit(){
+  try{cloud.cfg=(await idbGet('cloudCfg'))||null}catch(e){cloud.cfg=null}
+  window.addEventListener('online',()=>cloudSync('online'));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')cloudSync('visible')});
+  document.addEventListener('focusout',()=>{if(cloud.pendingRender){cloud.pendingRender=false;setTimeout(render,200)}});
+  setInterval(()=>{if(document.visibilityState==='visible')cloudSync('poll')},60000);
+  if(cloud.cfg){cloudStatus('مفعّلة');setTimeout(()=>cloudSync('start'),1500)}
+}
+
 // إزالة إعدادات الدخول السحابي القديمة محلياً؛ لا يؤثر ذلك في بيانات Firebase نفسها.
 localStorage.removeItem('teacherCloudSession');
 localStorage.removeItem('teacherCloudConfig');
-ensureState().then(()=>{if(activeStage().classes.length===0)currentClass=-1;render();try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}});
+ensureState().then(()=>{if(activeStage().classes.length===0)currentClass=-1;render();cloudInit();try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}});
 
 // service worker
 if('serviceWorker' in navigator && location.protocol!=='file:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
