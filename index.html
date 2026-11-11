@@ -401,12 +401,117 @@ function showNamesReview(names,title='مراجعة الأسماء قبل الح�
  ],false);
  $('#namesReviewText')?.addEventListener('input',()=>{const n=$('#namesReviewText').value.split(/\r?\n/).filter(x=>x.trim()).length;$('#namesReviewCount').textContent='عدد الأسطر: '+arabicDigits(n)});
 }
+// ===== قراءة الأسماء من الصورة: تنظيف الصورة (تعديل الميلان وإزالة خطوط الجدول) ثم قراءة كل اسم على حدة =====
+function ocrAdaptiveBinary(gray,W,H){
+  const R=Math.max(10,Math.round(W/40)),I=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let row=0;for(let x=0;x<W;x++){row+=gray[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+row}}
+  const bin=new Uint8Array(W*H);
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-R),y1=Math.min(H,y+R+1);for(let x=0;x<W;x++){const x0=Math.max(0,x-R),x1=Math.min(W,x+R+1);
+    const sum=I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0],mean=sum/((x1-x0)*(y1-y0));
+    if(gray[y*W+x]<mean-14&&gray[y*W+x]<200)bin[y*W+x]=1}}
+  return bin}
+function ocrSkewAngle(bin,W,H){
+  const xs=[],ys=[];for(let y=0;y<H;y++)for(let x=0;x<W;x+=2)if(bin[y*W+x]){xs.push(x);ys.push(y)}
+  const score=a=>{const tn=Math.tan(a*Math.PI/180),off=Math.ceil(W*Math.abs(tn))+2,h=new Uint32Array(H+2*off+4);for(let i=0;i<xs.length;i++)h[Math.round(ys[i]-(xs[i]-W/2)*tn)+off]++;let s=0;for(let i=0;i<h.length;i++)s+=h[i]*h[i];return s};
+  let best=0,bs=-1;for(let a=-5;a<=5.001;a+=0.25){const s=score(a);if(s>bs){bs=s;best=a}}
+  for(let a=best-0.25;a<=best+0.2501;a+=0.05){const s=score(a);if(s>bs){bs=s;best=a}}
+  return best}
+function ocrEraseRules(bin,W,H){
+  const gap=3;let rows=0,cols=0;
+  const longestRow=y=>{let best=0,run=0,g=0;for(let x=0;x<W;x++){if(bin[y*W+x]){run+=1+g;g=0;if(run>best)best=run}else if(run&&g<gap){g++}else{run=0;g=0}}return best};
+  const longestCol=x=>{let best=0,run=0,g=0;for(let y=0;y<H;y++){if(bin[y*W+x]){run+=1+g;g=0;if(run>best)best=run}else if(run&&g<gap){g++}else{run=0;g=0}}return best};
+  const rr=[];for(let y=0;y<H;y++)if(longestRow(y)>=W*0.5)rr.push(y);
+  const cc=[];for(let x=0;x<W;x++)if(longestCol(x)>=H*0.5)cc.push(x);
+  rr.forEach(y=>{for(let k=-1;k<=1;k++){const yy=y+k;if(yy>=0&&yy<H){bin.fill(0,yy*W,yy*W+W)}}});
+  cc.forEach(x=>{for(let k=-1;k<=1;k++){const xx=x+k;if(xx>=0&&xx<W)for(let y=0;y<H;y++)bin[y*W+xx]=0}});
+  return {rows:rr.length,cols:cc.length}}
+// إزالة خطوط الجدول المائلة قليلاً (التي تفلت من الإزالة العادية) ثم البقايا الرفيعة، حتى لا تلتصق الأسطر ببعضها
+function ocrKillSlantedRules(bin,W,H){
+  const K=Math.max(60,Math.round(W*0.6)),R=3,dil=new Uint8Array(W*H),mask=new Uint8Array(W*H);
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-R),y1=Math.min(H-1,y+R);for(let x=0;x<W;x++){let v=0;for(let yy=y0;yy<=y1;yy++){if(bin[yy*W+x]){v=1;break}}dil[y*W+x]=v}}
+  for(let y=0;y<H;y++){let st=-1;for(let x=0;x<=W;x++){const on=x<W&&dil[y*W+x];if(on){if(st<0)st=x}else if(st>=0){if(x-st>=K)for(let k=st;k<x;k++)mask[y*W+k]=1;st=-1}}}
+  for(let i=0;i<W*H;i++)if(mask[i])bin[i]=0;
+  // بقايا الخطوط: نحلل المكوّنات المتصلة ونحذف ما ليس شبيهاً بالحروف (رفيع أفقياً أو عمودياً، أو إطار فارغ)
+  const lab=new Uint8Array(W*H),stack=[],comps=[];
+  for(let y0=0;y0<H;y0++)for(let x0=0;x0<W;x0++){const p0=y0*W+x0;if(!bin[p0]||lab[p0])continue;
+    let minX=x0,maxX=x0,minY=y0,maxY=y0;const pix=[p0];lab[p0]=1;stack.length=0;stack.push(p0);
+    while(stack.length){const p=stack.pop(),y=(p/W)|0,x=p-y*W;if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;
+      for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;for(let dx=-1;dx<=1;dx++){const xx=x+dx;if(xx<0||xx>=W)continue;const q=yy*W+xx;if(bin[q]&&!lab[q]){lab[q]=1;stack.push(q);pix.push(q)}}}}
+    comps.push({w:maxX-minX+1,h:maxY-minY+1,pix})}
+  const hs=comps.filter(c=>c.w>=8&&c.h>=8&&c.pix.length/(c.w*c.h)>=0.1&&c.h<=Math.max(60,H*0.04)).map(c=>c.h).sort((p,q)=>p-q);
+  const mh=hs.length?hs[hs.length>>1]:24;
+  for(const c of comps){const fill=c.pix.length/(c.w*c.h);
+    if((c.w>=0.75*mh&&c.h<=0.2*mh+1)||(c.h>=1.6*mh&&c.w<=0.2*mh+1)||((c.w>=mh||c.h>=mh)&&fill<0.07))for(const q of c.pix)bin[q]=0}
+}
+function ocrSegmentLines(image,l,r,t,b){
+  const sx=Math.round(image.naturalWidth*l/100),sy=Math.round(image.naturalHeight*t/100),sw=Math.max(8,Math.round(image.naturalWidth*(r-l)/100)),sh=Math.max(8,Math.round(image.naturalHeight*(b-t)/100));
+  const sc=Math.min(1.5,1600/Math.max(sw,sh)),W=Math.max(8,Math.round(sw*sc)),H=Math.max(8,Math.round(sh*sc));
+  const mk=(w,h)=>{const c=document.createElement('canvas');c.width=w;c.height=h;return c};
+  const c0=mk(W,H),x0=c0.getContext('2d',{willReadFrequently:true});x0.fillStyle='#fff';x0.fillRect(0,0,W,H);x0.imageSmoothingQuality='high';x0.drawImage(image,sx,sy,sw,sh,0,0,W,H);
+  const toGray=c=>{const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,g=new Uint8Array(c.width*c.height);for(let i=0,j=0;i<d.length;i+=4,j++)g[j]=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);return g};
+  // 1) تعديل الميلان
+  let gray=toGray(c0),bin=ocrAdaptiveBinary(gray,W,H);
+  const angle=ocrSkewAngle(bin,W,H);
+  let c1=c0;
+  if(Math.abs(angle)>0.1){c1=mk(W,H);const x1=c1.getContext('2d',{willReadFrequently:true});x1.fillStyle='#fff';x1.fillRect(0,0,W,H);x1.translate(W/2,H/2);x1.rotate(-angle*Math.PI/180);x1.drawImage(c0,-W/2,-H/2);gray=toGray(c1);bin=ocrAdaptiveBinary(gray,W,H)}
+  // 2) إزالة خطوط الجدول الأفقية والعمودية
+  const rules=ocrEraseRules(bin,W,H);
+  ocrKillSlantedRules(bin,W,H);
+  // 3) فصل الأسطر بالمسقط الأفقي
+  const rowInk=new Uint32Array(H);for(let y=0;y<H;y++){let s=0;for(let x=0;x<W;x++)s+=bin[y*W+x];rowInk[y]=s}
+  const th=Math.max(2,Math.round(W*0.012));
+  const bands=(gapMax)=>{const out=[];let s=-1,gap=0;for(let y=0;y<H;y++){if(rowInk[y]>=th){if(s<0)s=y;gap=0}else if(s>=0){gap++;if(gap>gapMax){out.push([s,y-gap]);s=-1;gap=0}}}if(s>=0)out.push([s,H-1-gap]);return out};
+  let bs=bands(2);const hs=bs.map(x=>x[1]-x[0]+1).filter(h=>h>=8).sort((a,b)=>a-b),mh=hs.length?hs[hs.length>>1]:20;
+  // الجداول: المسافة بين الأسطر منتظمة، فنقدّرها (الارتباط الذاتي) ونقطع عند أعمق الفراغات بين الأسطر
+  let pitchUsed=0;
+  {const sm=new Float64Array(H);for(let y=0;y<H;y++){let a=0,c=0;for(let k=-1;k<=1;k++){const yy=y+k;if(yy>=0&&yy<H){a+=rowInk[yy];c++}}sm[y]=a/c}
+   let mean=0;for(let y=0;y<H;y++)mean+=sm[y];mean/=H;const xs=new Float64Array(H);let e0=0;for(let y=0;y<H;y++){xs[y]=sm[y]-mean;e0+=xs[y]*xs[y]}
+   const lo=Math.max(6,Math.round(mh*0.8)),hi=Math.min(H>>1,Math.round(mh*4));let P=0,pk=-1;
+   if(e0>0)for(let lag=lo;lag<=hi;lag++){let a=0;for(let y=0;y+lag<H;y++)a+=xs[y]*xs[y+lag];a/=e0;if(a>pk){pk=a;P=lag}}
+   if(P&&pk>=0.3&&H/P>=3){
+     const vs=[];for(let y=1;y<H-1;y++)if(sm[y]<=sm[y-1]&&sm[y]<=sm[y+1])vs.push(y);vs.sort((p,q)=>sm[p]-sm[q]);
+     const cuts=[];for(const y of vs){let ok=true;for(const c of cuts)if(Math.abs(y-c)<0.7*P){ok=false;break}if(ok)cuts.push(y)}cuts.sort((p,q)=>p-q);
+     const bd=[0,...cuts,H],out=[];
+     for(let i=0;i<bd.length-1;i++){let y0=-1,y1=-1;for(let y=bd[i];y<bd[i+1];y++)if(rowInk[y]>=th){if(y0<0)y0=y;y1=y}if(y0>=0&&y1-y0+1>=mh*0.45)out.push([y0,y1])}
+     if(out.length>=3){bs=out;pitchUsed=P}}}
+  if(!pitchUsed)bs=bands(Math.max(2,Math.round(mh*0.3))).filter(x=>x[1]-x[0]+1>=mh*0.45);
+  // 4) صورة الحبر الأسود على أبيض بعد التنظيف
+  const cb=mk(W,H),xb=cb.getContext('2d'),id=xb.createImageData(W,H);for(let i=0;i<W*H;i++){const v=bin[i]?0:255;id.data[4*i]=id.data[4*i+1]=id.data[4*i+2]=v;id.data[4*i+3]=255}xb.putImageData(id,0,0);
+  const lines=[];
+  for(let bi=0;bi<bs.length;bi++){
+    const [y0,y1]=bs[bi],upLim=bi>0?bs[bi-1][1]+1:0,dnLim=bi<bs.length-1?bs[bi+1][0]-1:H-1;
+    let minX=W,maxX=-1;for(let x=0;x<W;x++){let c=0;for(let y=y0;y<=y1;y++)c+=bin[y*W+x];if(c>=2){if(x<minX)minX=x;if(x>maxX)maxX=x}}
+    if(maxX<0||maxX-minX<mh)continue;
+    const pad=Math.round(mh*0.35),bh=y1-y0+1,bw=maxX-minX+1,k=Math.max(1,Math.min(3,72/bh));
+    const out=mk(Math.round((bw+2*pad)*k),Math.round((bh+2*pad)*k)),xo=out.getContext('2d');xo.fillStyle='#fff';xo.fillRect(0,0,out.width,out.height);xo.imageSmoothingQuality='high';
+    const dx=Math.max(0,minX-pad),dy=Math.max(upLim,y0-pad),dw=Math.min(W,maxX+pad+1)-dx,dh=Math.min(dnLim+1,y1+pad+1)-dy;
+    xo.drawImage(cb,dx,dy,dw,dh,(dx-(minX-pad))*k,(dy-(y0-pad))*k,dw*k,dh*k);
+    lines.push(out)}
+  return {lines,info:{angle:Math.round(angle*100)/100,rules,medianHeight:mh,bands:bs.length,pitch:pitchUsed,size:[W,H]}}}
+function ocrCleanName(t){return String(t||'').replace(/[\u0660-\u0669\u06F0-\u06F9\u0640\u060C\u061B\u061F\u066A-\u066D]/g,' ').replace(/[^\u0600-\u06FF\s]/g,' ').replace(/\s+/g,' ').trim()}
+async function ocrByLines(image,l,r,t,b,status){
+  const say=m=>{if(status)status.textContent=m};
+  say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
+  const {lines}=ocrSegmentLines(image,l,r,t,b);
+  if(!lines.length)return [];
+  const worker=await window.Tesseract.createWorker('ara',1,{logger:m=>{if(m.status&&/loading|initializ/i.test(m.status))say('تجهيز قارئ النصوص… '+(m.progress!=null?Math.round(m.progress*100)+'%':''))}});
+  const out=[];
+  try{
+    try{await worker.setParameters({tessedit_pageseg_mode:'7',preserve_interword_spaces:'1'})}catch(e){}
+    for(let i=0;i<lines.length;i++){
+      say(`قراءة الأسماء… ${arabicDigits(i+1)}/${arabicDigits(lines.length)}`);
+      const res=await worker.recognize(lines[i]);
+      const name=ocrCleanName(res&&res.data&&res.data.text);
+      if(name.length>=3&&/[\u0600-\u06FF]{2,}/.test(name))out.push(name)}
+  }finally{try{await worker.terminate()}catch(e){}}
+  return out}
 async function extractNamesFromImage(file){
  const image=await new Promise((resolve,reject)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('تعذر فتح الصورة'))};img.src=url});
  let left=38,right=90,top=0,bottom=100;
  confirmModal('تحديد منطقة أسماء الطلاب',`<div class="hint" style="margin-bottom:8px">اسحب الإطار لتحديد منطقة الأسماء. اسحب من داخل الإطار لتحريكه، أو اسحب مقابض الزوايا والجوانب لتغيير حجمه. اجعل الإطار يشمل الأسماء كاملة دون عمود الأرقام.</div><div style="display:grid;gap:8px"><div id="ocrCropStage" style="position:relative;width:100%;max-height:390px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:#f5f6f8;touch-action:none;user-select:none"><canvas id="ocrSourcePreview" style="display:block;width:100%;height:auto;max-height:390px;object-fit:contain"></canvas><div id="ocrCropBox" style="position:absolute;left:${left}%;top:${top}%;width:${right-left}%;height:${bottom-top}%;border:2px solid #1683ff;background:rgba(22,131,255,.10);box-shadow:0 0 0 9999px rgba(0,0,0,.38);box-sizing:border-box;touch-action:none;cursor:move"><span data-crop-handle="nw" style="position:absolute;left:-7px;top:-7px"></span><span data-crop-handle="ne" style="position:absolute;right:-7px;top:-7px"></span><span data-crop-handle="sw" style="position:absolute;left:-7px;bottom:-7px"></span><span data-crop-handle="se" style="position:absolute;right:-7px;bottom:-7px"></span><span data-crop-handle="n" style="position:absolute;left:50%;top:-6px;transform:translateX(-50%)"></span><span data-crop-handle="s" style="position:absolute;left:50%;bottom:-6px;transform:translateX(-50%)"></span><span data-crop-handle="w" style="position:absolute;left:-6px;top:50%;transform:translateY(-50%)"></span><span data-crop-handle="e" style="position:absolute;right:-6px;top:50%;transform:translateY(-50%)"></span></div></div><div class="hint">حدود الاقتصاص: أفقي <b id="ocrCropX">${left}–${right}%</b>، عمودي <b id="ocrCropY">${top}–${bottom}%</b></div><canvas id="ocrPreview" style="display:none"></canvas><div id="ocrStatus" class="notice">سيتم تكبير المنطقة المحددة وتحسين التباين وإجراء أكثر من محاولة للتعرف على الأسماء.</div></div>`,[
  {text:'استخراج الأسماء من العمود',kind:'primary',fn:async()=>{const status=$('#ocrStatus');try{
   if(!window.Tesseract){status.textContent='جارٍ تحميل مكتبة التعرف على النصوص...';await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('تعذر تحميل مكتبة OCR. اتصل بالإنترنت ثم حاول مجدداً.'));document.head.appendChild(sc)})}
+  try{const named=await ocrByLines(image,left,right,top,bottom,status);if(named.length){closeModal();showNamesReview(named,'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');return}}catch(e){console.warn('line OCR failed',e);if(status)status.textContent='جارٍ المحاولة بطريقة ثانية…'}
   const source=$('#ocrPreview');if(!source||!source.width||!source.height)throw new Error('معاينة الصورة غير جاهزة');
   // أنشئ نسختين عاليتَي الدقة: تدرج رمادي محسّن ونسخة أبيض/أسود لإزالة أثر الظلال.
   const scale=Math.min(2.5,3200/Math.max(source.width,source.height));
