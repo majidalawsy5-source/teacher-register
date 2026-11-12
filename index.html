@@ -427,9 +427,19 @@ function ocrEraseRules(bin,W,H){
   return {rows:rr.length,cols:cc.length}}
 // إزالة خطوط الجدول المائلة قليلاً (التي تفلت من الإزالة العادية) ثم البقايا الرفيعة، حتى لا تلتصق الأسطر ببعضها
 function ocrKillSlantedRules(bin,W,H){
-  const K=Math.max(60,Math.round(W*0.6)),R=3,dil=new Uint8Array(W*H),mask=new Uint8Array(W*H);
-  for(let y=0;y<H;y++){const y0=Math.max(0,y-R),y1=Math.min(H-1,y+R);for(let x=0;x<W;x++){let v=0;for(let yy=y0;yy<=y1;yy++){if(bin[yy*W+x]){v=1;break}}dil[y*W+x]=v}}
-  for(let y=0;y<H;y++){let st=-1;for(let x=0;x<=W;x++){const on=x<W&&dil[y*W+x];if(on){if(st<0)st=x}else if(st>=0){if(x-st>=K)for(let k=st;k<x;k++)mask[y*W+k]=1;st=-1}}}
+  const mask=new Uint8Array(W*H);
+  // خطوط أفقية بميلان مختلف (الصورة قد تكون مائلة أو بمنظور): نمشي على مسارات مائلة ونبحث عن حبر متصل طويل
+  const K=Math.max(80,Math.round(W*0.55)),ink=(x,y)=>y>=0&&y<H&&(bin[y*W+x]||(y>0&&bin[(y-1)*W+x])||(y<H-1&&bin[(y+1)*W+x]));
+  for(let si=-6;si<=6;si++){const sl=si*0.007,off=Math.abs(sl)*W/2;
+    for(let y0=Math.floor(-off);y0<H+off;y0++){let st=-1;
+      for(let x=0;x<=W;x++){let on=false,y=0;if(x<W){y=y0+Math.round(sl*(x-W/2));on=y>=0&&y<H&&ink(x,y)}
+        if(on){if(st<0)st=x}else if(st>=0){if(x-st>=K){for(let k=st;k<x;k++){const yy=y0+Math.round(sl*(k-W/2));for(let d=-1;d<=1;d++){const y2=yy+d;if(y2>=0&&y2<H)mask[y2*W+k]=1}}}st=-1}}}}
+  // خطوط عمودية (حدود الأعمدة): نفس الفكرة بالاتجاه العمودي
+  const Kv=Math.max(80,Math.round(H*0.06)),inkv=(x,y)=>x>=0&&x<W&&(bin[y*W+x]||(x>0&&bin[y*W+x-1])||(x<W-1&&bin[y*W+x+1]));
+  for(let si=-4;si<=4;si++){const sl=si*0.007,off=Math.abs(sl)*H/2;
+    for(let x0=Math.floor(-off);x0<W+off;x0++){let st=-1;
+      for(let y=0;y<=H;y++){let on=false;if(y<H){const x=x0+Math.round(sl*(y-H/2));on=x>=0&&x<W&&inkv(x,y)}
+        if(on){if(st<0)st=y}else if(st>=0){if(y-st>=Kv){for(let k=st;k<y;k++){const xx=x0+Math.round(sl*(k-H/2));for(let d=-1;d<=1;d++){const x2=xx+d;if(x2>=0&&x2<W)mask[k*W+x2]=1}}}st=-1}}}}
   for(let i=0;i<W*H;i++)if(mask[i])bin[i]=0;
   // بقايا الخطوط: نحلل المكوّنات المتصلة ونحذف ما ليس شبيهاً بالحروف (رفيع أفقياً أو عمودياً، أو إطار فارغ)
   const lab=new Uint8Array(W*H),stack=[],comps=[];
@@ -454,6 +464,18 @@ function ocrSegmentLines(image,l,r,t,b){
   const angle=ocrSkewAngle(bin,W,H);
   let c1=c0;
   if(Math.abs(angle)>0.1){c1=mk(W,H);const x1=c1.getContext('2d',{willReadFrequently:true});x1.fillStyle='#fff';x1.fillRect(0,0,W,H);x1.translate(W/2,H/2);x1.rotate(-angle*Math.PI/180);x1.drawImage(c0,-W/2,-H/2);gray=toGray(c1);bin=ocrAdaptiveBinary(gray,W,H)}
+  // 1.5) استبعاد ما هو خارج الورقة (سجاد أو طاولة): أعمدة أغمق بكثير من الورقة وتلامس حافة الإطار
+  {const med=new Float32Array(W),tmp=new Uint8Array(Math.ceil(H/4)+1);
+   for(let x=0;x<W;x++){let n=0;for(let y=0;y<H;y+=4)tmp[n++]=gray[y*W+x];const arr=Array.prototype.slice.call(tmp,0,n).sort((p,q)=>p-q);med[x]=arr[n>>1]}
+   const sm=new Float32Array(W);for(let x=0;x<W;x++){let a=0,c=0;for(let k=-6;k<=6;k++){const xx=x+k;if(xx>=0&&xx<W){a+=med[xx];c++}}sm[x]=a/c}
+   const ctr=Array.prototype.slice.call(sm,Math.floor(W*0.25),Math.ceil(W*0.75)).sort((p,q)=>p-q),th=0.75*ctr[ctr.length>>1];
+   const wipe=(a,b)=>{a=Math.max(0,a);b=Math.min(W-1,b);for(let y=0;y<H;y++)for(let x=a;x<=b;x++)bin[y*W+x]=0};
+   // مقاطع متصلة من الأعمدة الداكنة؛ نمسح من حافتها الداخلية حتى حافة الإطار (الزوايا البيضاء الناتجة عن تدوير الصورة لا تهم)
+   let leftEnd=-1,rightStart=W;
+   for(let x=0;x<W;){if(sm[x]>=th){x++;continue}let e=x;while(e+1<W&&sm[e+1]<th)e++;
+     if(e-x+1>=Math.max(10,W*0.06)){if(x>=W*0.5)rightStart=Math.min(rightStart,x);else if(e<W*0.5)leftEnd=Math.max(leftEnd,e)}
+     x=e+1}
+   if(rightStart<W)wipe(rightStart-3,W-1);if(leftEnd>=0)wipe(0,leftEnd+3)}
   // 2) إزالة خطوط الجدول الأفقية والعمودية
   const rules=ocrEraseRules(bin,W,H);
   ocrKillSlantedRules(bin,W,H);
@@ -477,18 +499,71 @@ function ocrSegmentLines(image,l,r,t,b){
   if(!pitchUsed)bs=bands(Math.max(2,Math.round(mh*0.3))).filter(x=>x[1]-x[0]+1>=mh*0.45);
   // 4) صورة الحبر الأسود على أبيض بعد التنظيف
   const cb=mk(W,H),xb=cb.getContext('2d'),id=xb.createImageData(W,H);for(let i=0;i<W*H;i++){const v=bin[i]?0:255;id.data[4*i]=id.data[4*i+1]=id.data[4*i+2]=v;id.data[4*i+3]=255}xb.putImageData(id,0,0);
-  const lines=[];
+  // فصل الكلمات داخل كل سطر: نحسب الفراغات بين مجموعات الحبر، ونحدد حدّاً يفصل فراغ الكلمات عن فراغ الحروف
+  const runsOf=(y0,y1)=>{const r=[];let st=-1;for(let x=0;x<=W;x++){let c=0;if(x<W)for(let y=y0;y<=y1;y++)c+=bin[y*W+x];if(c>=1){if(st<0)st=x}else if(st>=0){r.push([st,x-1]);st=-1}}return r};
+  const allRuns=bs.map(([y0,y1])=>runsOf(y0,y1));
+  const gaps=[];allRuns.forEach(rs=>{for(let i=1;i<rs.length;i++)gaps.push(rs[i][0]-rs[i-1][1]-1)});
+  let T=Math.round(mh*0.25);
+  {const g=gaps.filter(v=>v>=1&&v<=mh*0.6).sort((p,q)=>p-q);
+   if(g.length>=8){let best=-1,thr=T;for(let i=1;i<g.length;i++){if(g[i]===g[i-1])continue;let sa=0,sb=0;for(let j=0;j<i;j++)sa+=g[j];for(let j=i;j<g.length;j++)sb+=g[j];const na=i,nb=g.length-i,ma=sa/na,mb=sb/nb,v=na*nb*(ma-mb)*(ma-mb);if(v>best){best=v;thr=(g[i-1]+g[i])/2}}
+     T=Math.max(Math.round(mh*0.14),Math.min(Math.round(mh*0.32),Math.round(thr)))}}
+  const lines=[];let wordCounts=[];
+  const gInfo=bs.map(([y0,y1],bi)=>{const rs=allRuns[bi];let groups=[];for(const r of rs){const last=groups[groups.length-1];if(last&&r[0]-last[1]-1<=T)last[1]=r[1];else groups.push([r[0],r[1]])}return groups});
+  // عمود الأرقام (أو الترقيم): مجموعة قصيرة على الطرف، موقعها ثابت تقريباً في أغلب الأسطر، وبينها وبين الاسم فراغ أكبر من فراغ الكلمات
+  const edgeCluster=(side)=>{const cs=[];gInfo.forEach(g=>{if(g.length>=2){const e=side==='R'?g[g.length-1]:g[0];cs.push((e[0]+e[1])/2)}});
+    if(cs.length<6)return null;cs.sort((p,q)=>p-q);let best=0,bc=0;for(let i=0;i<cs.length;i++){let j=i;while(j<cs.length&&cs[j]-cs[i]<=mh)j++;if(j-i>best){best=j-i;bc=(cs[i]+cs[j-1])/2}}
+    return best>=0.45*cs.length?bc:null};
+  const cR=edgeCluster('R'),cL=edgeCluster('L');
   for(let bi=0;bi<bs.length;bi++){
     const [y0,y1]=bs[bi],upLim=bi>0?bs[bi-1][1]+1:0,dnLim=bi<bs.length-1?bs[bi+1][0]-1:H-1;
-    let minX=W,maxX=-1;for(let x=0;x<W;x++){let c=0;for(let y=y0;y<=y1;y++)c+=bin[y*W+x];if(c>=2){if(x<minX)minX=x;if(x>maxX)maxX=x}}
-    if(maxX<0||maxX-minX<mh)continue;
-    const pad=Math.round(mh*0.35),bh=y1-y0+1,bw=maxX-minX+1,k=Math.max(1,Math.min(3,72/bh));
-    const out=mk(Math.round((bw+2*pad)*k),Math.round((bh+2*pad)*k)),xo=out.getContext('2d');xo.fillStyle='#fff';xo.fillRect(0,0,out.width,out.height);xo.imageSmoothingQuality='high';
-    const dx=Math.max(0,minX-pad),dy=Math.max(upLim,y0-pad),dw=Math.min(W,maxX+pad+1)-dx,dh=Math.min(dnLim+1,y1+pad+1)-dy;
-    xo.drawImage(cb,dx,dy,dw,dh,(dx-(minX-pad))*k,(dy-(y0-pad))*k,dw*k,dh*k);
-    lines.push(out)}
-  return {lines,info:{angle:Math.round(angle*100)/100,rules,medianHeight:mh,bands:bs.length,pitch:pitchUsed,size:[W,H]}}}
-function ocrCleanName(t){return String(t||'').replace(/[\u0660-\u0669\u06F0-\u06F9\u0640\u060C\u061B\u061F\u066A-\u066D]/g,' ').replace(/[^\u0600-\u06FF\s]/g,' ').replace(/\s+/g,' ').trim()}
+    let groups=gInfo[bi].map(g=>g.slice());if(!groups.length)continue;
+    const far=1.2*mh,short=2.2*mh,mid=0.6*mh;
+    for(let pass=0;pass<3&&groups.length>=2;pass++){
+      const n=groups.length,gr=groups[n-1],gl=groups[0],wr=gr[1]-gr[0]+1,wl=gl[1]-gl[0]+1,gapR=gr[0]-groups[n-2][1]-1,gapL=groups[1][0]-gl[1]-1;
+      const okR=wr<=short&&(gapR>=far||(cR!==null&&Math.abs((gr[0]+gr[1])/2-cR)<=mh&&gapR>=mid));
+      const okL=wl<=short&&(gapL>=far||(cL!==null&&Math.abs((gl[0]+gl[1])/2-cL)<=mh&&gapL>=mid));
+      if(okR)groups.pop();else if(okL)groups.shift();else break}
+    groups=groups.filter(g=>{let ink=0,mn=1e9,mx=-1;for(let x=g[0];x<=g[1];x++)for(let y=y0;y<=y1;y++)if(bin[y*W+x]){ink++;if(y<mn)mn=y;if(y>mx)mx=y}return ink>=10&&(mx-mn+1)>=0.3*mh&&(g[1]-g[0]+1)>=0.12*mh});
+    if(!groups.length)continue;
+    const totalW=groups.reduce((p,g)=>p+(g[1]-g[0]+1),0),sp=Math.max(10,Math.round(mh*0.9));
+    if(totalW<mh)continue;
+    const pad=Math.round(mh*0.35),dy=Math.max(upLim,y0-pad),dh=Math.min(dnLim+1,y1+pad+1)-dy,bw=totalW+(groups.length-1)*sp,k=Math.max(1,Math.min(3,72/(y1-y0+1)));
+    const out=mk(Math.round((bw+2*pad)*k),Math.round(((y0-pad)<upLim?(y1+pad+1-upLim):(dh))*k)),xo=out.getContext('2d');xo.fillStyle='#fff';xo.fillRect(0,0,out.width,out.height);xo.imageSmoothingQuality='high';
+    let cx=pad;const yOff=(dy-(y0-pad))*k;
+    for(const g of groups){const gw=g[1]-g[0]+1,sx0=Math.max(0,g[0]-1),sw0=Math.min(W,g[1]+2)-sx0;xo.drawImage(cb,sx0,dy,sw0,dh,Math.round((cx-(g[0]-sx0))*k),Math.max(0,yOff),Math.round(sw0*k),Math.round(dh*k));cx+=gw+sp}
+    lines.push(out);wordCounts.push(groups.length)}
+  return {lines,info:{angle:Math.round(angle*100)/100,rules,medianHeight:mh,bands:bs.length,pitch:pitchUsed,wordGap:T,words:wordCounts,size:[W,H]}}}
+// تصحيح الأسماء بعد القراءة: استعادة المسافات المفقودة، وحذف الحروف الدخيلة من عمود الأرقام
+const OCR_NAME_WORDS=`محمد احمد علي حسن حسين حيدر عباس جعفر كاظم موسى مهدي رضا باقر جواد صادق عبد عبدالله عبدالرحمن عبدالرحيم عبدالكريم عبدالجبار عبدالامير عبدالزهره عبدالحسين عبدالعباس عبدعلي عبدالواحد عبدالستار عبدالرزاق عبدالحميد عبدالقادر عبدالمجيد عبدالسلام عبدالرضا عبدالهادي عبدالمهيمن عبدالباقي عبدالغني عبدالمطلب عبدالنبي عبدالاله عبدالصمد عبدالخالق عبدالرسول عبدالحليم عبدالعزيز عبدالوهاب عبدالفتاح عبدالمنعم عبدالكاظم عبدالصاحب عبدالجليل عبدالروف ابراهيم اسماعيل اسحاق يوسف يعقوب يحيي عيسي سليمان داود ادم نوح هود صالح ايوب يونس زكريا اياد ايمن ايهاب اسامه اسعد اسيد اكرم اركان امير اميرحسين انور انس اوس ثامر ثائر جاسم جابر جبار جلال جليل جمال جميل حامد حاتم حازم حبيب حسام حكيم حميد حمزه حمود خالد خضر خليل دريد داخل ذوالفقار رائد راضي رافد راهي رحيم رسول رشيد رعد رياض زيد زيدان زياد زكي زهير ساجد سالم سامي سامر سجاد سعد سعدون سعيد سلام سلمان سلطان سليم سمير سيف شاكر شاهين شبل شعلان شهاب صباح صبري صلاح صفاء ضياء طارق طالب طلال طه عادل عامر عدنان عدي عذاب عصام عقيل علاء عماد عمار عمر عمران عون عواد عوده غازي غانم فاضل فاروق فارس فالح فراس فرحان فرقد فريد فلاح فؤاد فيصل قاسم قصي قيس كامل كريم كرار لؤي ليث ماجد مازن مالك مبارك مجتبي مجيد محسن محمود مرتضي مصطفي مصعب مضر منتظر منذر منصور منير مهند موسي مؤيد ميثم ميثاق ناجي ناصر نبيل نجاح نجم نزار نصير نعيم نعمه نمير نور نورالدين هادي هاشم هشام هيثم واثق وائل وسام وليد ياسر ياسين لقمان ادريس رحمان سرحان الدين الله الحسين الرضا الباقر`;
+const ocrNormKey=s=>String(s||'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي');
+let _ocrVocab=null;
+function ocrVocab(){if(!_ocrVocab)_ocrVocab=new Set(OCR_NAME_WORDS.split(/\s+/).filter(Boolean).map(ocrNormKey));return _ocrVocab}
+// تقسيم كلمة ملتصقة إلى كلمات معروفة (مع كلمة مجهولة واحدة كحد أقصى لا تقل عن 3 أحرف)
+function ocrSplitToken(tok){
+  const v=ocrVocab(),n=tok.length;
+  if(n<6||v.has(ocrNormKey(tok)))return [tok];
+  const key=ocrNormKey(tok),INF=1e9,best=new Array(n+1).fill(null);best[0]={c:0,u:0,p:-1};
+  for(let i=1;i<=n;i++)for(let j=0;j<i;j++){const b=best[j];if(!b)continue;const w=key.slice(j,i),L=i-j;let c,u=b.u;
+    if(v.has(w)&&L>=3)c=b.c+0.2;else if(L>=3){u++;c=b.c+6+L*0.2}else continue;
+    if(u>1)continue;if(!best[i]||c<best[i].c)best[i]={c,u,p:j}}
+  if(!best[n])return [tok];
+  const parts=[];let i=n;while(i>0){const j=best[i].p;parts.unshift(tok.slice(j,i));i=j}
+  if(parts.length<2)return [tok];
+  // لا نقسم إذا لم تُعرف أي قطعة (فقط قطعة مجهولة واحدة)
+  const known=parts.filter(p=>v.has(ocrNormKey(p))).length;
+  return known>=1?parts:[tok];
+}
+function ocrFixName(name){
+  let t=String(name||'').split(/\s+/).filter(Boolean);
+  if(t.length>=2&&t[0].length===1)t.shift();
+  if(t.length>=2&&t[t.length-1].length===1)t.pop();
+  // دمج «عبد» + «ال...» (عبد الله → عبدالله)
+  const j=[];for(let i=0;i<t.length;i++){if(t[i]==='عبد'&&t[i+1]&&t[i+1].startsWith('ال')){j.push(t[i]+t[i+1]);i++}else j.push(t[i])}
+  const out=[];for(const w of j)out.push(...ocrSplitToken(w));
+  return out.join(' ');
+}
+
+function ocrCleanName(t){return String(t||'').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'').replace(/[\u0660-\u0669\u06F0-\u06F9\u0640\u060C\u061B\u061F\u066A-\u066D]/g,' ').replace(/[^\u0600-\u06FF\s]/g,' ').replace(/\s+/g,' ').trim()}
 async function ocrByLines(image,l,r,t,b,status){
   const say=m=>{if(status)status.textContent=m};
   say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
@@ -502,7 +577,7 @@ async function ocrByLines(image,l,r,t,b,status){
       say(`قراءة الأسماء… ${arabicDigits(i+1)}/${arabicDigits(lines.length)}`);
       const res=await worker.recognize(lines[i]);
       const name=ocrCleanName(res&&res.data&&res.data.text);
-      if(name.length>=3&&/[\u0600-\u06FF]{2,}/.test(name))out.push(name)}
+      if(name.length>=3&&/[\u0600-\u06FF]{2,}/.test(name))out.push(ocrFixName(name))}
   }finally{try{await worker.terminate()}catch(e){}}
   return out}
 async function extractNamesFromImage(file){
@@ -537,7 +612,7 @@ async function extractNamesFromImage(file){
   // اختيار النتيجة الأوضح والأكثر اكتمالاً، مع حذف التكرارات المتجاورة فقط.
   const chosen=score(b,second)>score(a,first)?b:a;const lines=[];for(const line of chosen){const key=line.replace(/[\sـ]/g,'');if(!lines.length||lines[lines.length-1].replace(/[\sـ]/g,'')!==key)lines.push(line)}
   if(!lines.length)throw new Error('لم تُقرأ أسماء واضحة. جرّب تحديد العمود بصورة أضيق أو تصوير الورقة بشكل مستقيم وبإضاءة جيدة.');
-  closeModal();showNamesReview(lines,'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');
+  closeModal();showNamesReview(lines.map(ocrFixName),'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');
  }catch(err){if(status)status.textContent='تعذر الاستخراج: '+(err?.message||err);else throw err}}},
  {text:'إلغاء',kind:'soft'}
  ],false);
