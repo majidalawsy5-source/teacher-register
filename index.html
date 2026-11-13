@@ -582,7 +582,7 @@ async function ocrByLines(image,l,r,t,b,status){
       const wl=words&&words[i];
       if(wl&&wl.length>=2&&name.split(' ').filter(Boolean).length!==wl.length){
         try{await worker.setParameters({tessedit_pageseg_mode:'8'});const parts=[];
-          for(const c of wl){const rw=await worker.recognize(c);const tw=ocrCleanName(rw&&rw.data&&rw.data.text).replace(/\s+/g,'');if(tw)parts.push(tw)}
+          for(const c of wl.slice().reverse()){const rw=await worker.recognize(c);const tw=ocrCleanName(rw&&rw.data&&rw.data.text).replace(/\s+/g,'');if(tw)parts.push(tw)}
           if(parts.length===wl.length)name=parts.join(' ')}catch(e){}
         try{await worker.setParameters({tessedit_pageseg_mode:'7',preserve_interword_spaces:'1'})}catch(e){}}
       if(name.length>=3&&/[\u0600-\u06FF]{2,}/.test(name))out.push(ocrFixName(name))}
