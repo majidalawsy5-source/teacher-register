@@ -507,7 +507,7 @@ function ocrSegmentLines(image,l,r,t,b){
   {const g=gaps.filter(v=>v>=1&&v<=mh*0.6).sort((p,q)=>p-q);
    if(g.length>=8){let best=-1,thr=T;for(let i=1;i<g.length;i++){if(g[i]===g[i-1])continue;let sa=0,sb=0;for(let j=0;j<i;j++)sa+=g[j];for(let j=i;j<g.length;j++)sb+=g[j];const na=i,nb=g.length-i,ma=sa/na,mb=sb/nb,v=na*nb*(ma-mb)*(ma-mb);if(v>best){best=v;thr=(g[i-1]+g[i])/2}}
      T=Math.max(Math.round(mh*0.14),Math.min(Math.round(mh*0.32),Math.round(thr)))}}
-  const lines=[];let wordCounts=[];
+  const lines=[],wordLists=[];let wordCounts=[];
   const gInfo=bs.map(([y0,y1],bi)=>{const rs=allRuns[bi];let groups=[];for(const r of rs){const last=groups[groups.length-1];if(last&&r[0]-last[1]-1<=T)last[1]=r[1];else groups.push([r[0],r[1]])}return groups});
   // عمود الأرقام (أو الترقيم): مجموعة قصيرة على الطرف، موقعها ثابت تقريباً في أغلب الأسطر، وبينها وبين الاسم فراغ أكبر من فراغ الكلمات
   const edgeCluster=(side)=>{const cs=[];gInfo.forEach(g=>{if(g.length>=2){const e=side==='R'?g[g.length-1]:g[0];cs.push((e[0]+e[1])/2)}});
@@ -527,12 +527,13 @@ function ocrSegmentLines(image,l,r,t,b){
     if(!groups.length)continue;
     const totalW=groups.reduce((p,g)=>p+(g[1]-g[0]+1),0),sp=Math.max(10,Math.round(mh*0.9));
     if(totalW<mh)continue;
-    const pad=Math.round(mh*0.35),dy=Math.max(upLim,y0-pad),dh=Math.min(dnLim+1,y1+pad+1)-dy,bw=totalW+(groups.length-1)*sp,k=Math.max(1,Math.min(3,72/(y1-y0+1)));
-    const out=mk(Math.round((bw+2*pad)*k),Math.round(((y0-pad)<upLim?(y1+pad+1-upLim):(dh))*k)),xo=out.getContext('2d');xo.fillStyle='#fff';xo.fillRect(0,0,out.width,out.height);xo.imageSmoothingQuality='high';
-    let cx=pad;const yOff=(dy-(y0-pad))*k;
+    const pad=Math.round(mh*0.35),hp=Math.round(mh*0.8),dy=Math.max(upLim,y0-pad),dh=Math.min(dnLim+1,y1+pad+1)-dy,bw=totalW+(groups.length-1)*sp,k=Math.max(1,Math.min(3,72/(y1-y0+1)));
+    const out=mk(Math.round((bw+2*hp)*k),Math.round(((y0-pad)<upLim?(y1+pad+1-upLim):(dh))*k)),xo=out.getContext('2d');xo.fillStyle='#fff';xo.fillRect(0,0,out.width,out.height);xo.imageSmoothingQuality='high';
+    let cx=hp;const yOff=(dy-(y0-pad))*k;
     for(const g of groups){const gw=g[1]-g[0]+1,sx0=Math.max(0,g[0]-1),sw0=Math.min(W,g[1]+2)-sx0;xo.drawImage(cb,sx0,dy,sw0,dh,Math.round((cx-(g[0]-sx0))*k),Math.max(0,yOff),Math.round(sw0*k),Math.round(dh*k));cx+=gw+sp}
+    wordLists.push(groups.map(g=>{const gw=g[1]-g[0]+1,sx0=Math.max(0,g[0]-1),sw0=Math.min(W,g[1]+2)-sx0,c2=mk(Math.round((gw+2*hp)*k),out.height),x2=c2.getContext('2d');x2.fillStyle='#fff';x2.fillRect(0,0,c2.width,c2.height);x2.imageSmoothingQuality='high';x2.drawImage(cb,sx0,dy,sw0,dh,Math.round((hp-(g[0]-sx0))*k),Math.max(0,yOff),Math.round(sw0*k),Math.round(dh*k));return c2}));
     lines.push(out);wordCounts.push(groups.length)}
-  return {lines,info:{angle:Math.round(angle*100)/100,rules,medianHeight:mh,bands:bs.length,pitch:pitchUsed,wordGap:T,words:wordCounts,size:[W,H]}}}
+  return {lines,words:wordLists,info:{angle:Math.round(angle*100)/100,rules,medianHeight:mh,bands:bs.length,pitch:pitchUsed,wordGap:T,words:wordCounts,size:[W,H]}}}
 // تصحيح الأسماء بعد القراءة: استعادة المسافات المفقودة، وحذف الحروف الدخيلة من عمود الأرقام
 const OCR_NAME_WORDS=`محمد احمد علي حسن حسين حيدر عباس جعفر كاظم موسى مهدي رضا باقر جواد صادق عبد عبدالله عبدالرحمن عبدالرحيم عبدالكريم عبدالجبار عبدالامير عبدالزهره عبدالحسين عبدالعباس عبدعلي عبدالواحد عبدالستار عبدالرزاق عبدالحميد عبدالقادر عبدالمجيد عبدالسلام عبدالرضا عبدالهادي عبدالمهيمن عبدالباقي عبدالغني عبدالمطلب عبدالنبي عبدالاله عبدالصمد عبدالخالق عبدالرسول عبدالحليم عبدالعزيز عبدالوهاب عبدالفتاح عبدالمنعم عبدالكاظم عبدالصاحب عبدالجليل عبدالروف ابراهيم اسماعيل اسحاق يوسف يعقوب يحيي عيسي سليمان داود ادم نوح هود صالح ايوب يونس زكريا اياد ايمن ايهاب اسامه اسعد اسيد اكرم اركان امير اميرحسين انور انس اوس ثامر ثائر جاسم جابر جبار جلال جليل جمال جميل حامد حاتم حازم حبيب حسام حكيم حميد حمزه حمود خالد خضر خليل دريد داخل ذوالفقار رائد راضي رافد راهي رحيم رسول رشيد رعد رياض زيد زيدان زياد زكي زهير ساجد سالم سامي سامر سجاد سعد سعدون سعيد سلام سلمان سلطان سليم سمير سيف شاكر شاهين شبل شعلان شهاب صباح صبري صلاح صفاء ضياء طارق طالب طلال طه عادل عامر عدنان عدي عذاب عصام عقيل علاء عماد عمار عمر عمران عون عواد عوده غازي غانم فاضل فاروق فارس فالح فراس فرحان فرقد فريد فلاح فؤاد فيصل قاسم قصي قيس كامل كريم كرار لؤي ليث ماجد مازن مالك مبارك مجتبي مجيد محسن محمود مرتضي مصطفي مصعب مضر منتظر منذر منصور منير مهند موسي مؤيد ميثم ميثاق ناجي ناصر نبيل نجاح نجم نزار نصير نعيم نعمه نمير نور نورالدين هادي هاشم هشام هيثم واثق وائل وسام وليد ياسر ياسين لقمان ادريس رحمان سرحان الدين الله الحسين الرضا الباقر`;
 const ocrNormKey=s=>String(s||'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/ؤ/g,'و').replace(/ئ/g,'ي');
@@ -567,7 +568,7 @@ function ocrCleanName(t){return String(t||'').replace(/[\u064B-\u065F\u0670\u06D
 async function ocrByLines(image,l,r,t,b,status){
   const say=m=>{if(status)status.textContent=m};
   say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
-  const {lines}=ocrSegmentLines(image,l,r,t,b);
+  const {lines,words}=ocrSegmentLines(image,l,r,t,b);
   if(!lines.length)return [];
   const worker=await window.Tesseract.createWorker('ara',1,{logger:m=>{if(m.status&&/loading|initializ/i.test(m.status))say('تجهيز قارئ النصوص… '+(m.progress!=null?Math.round(m.progress*100)+'%':''))}});
   const out=[];
@@ -576,7 +577,14 @@ async function ocrByLines(image,l,r,t,b,status){
     for(let i=0;i<lines.length;i++){
       say(`قراءة الأسماء… ${arabicDigits(i+1)}/${arabicDigits(lines.length)}`);
       const res=await worker.recognize(lines[i]);
-      const name=ocrCleanName(res&&res.data&&res.data.text);
+      let name=ocrCleanName(res&&res.data&&res.data.text);
+      // تحقق: عدد الكلمات المقروءة يجب أن يساوي عدد الكلمات التي فصلناها من الصورة، وإلا نقرأ كل كلمة لوحدها
+      const wl=words&&words[i];
+      if(wl&&wl.length>=2&&name.split(' ').filter(Boolean).length!==wl.length){
+        try{await worker.setParameters({tessedit_pageseg_mode:'8'});const parts=[];
+          for(const c of wl){const rw=await worker.recognize(c);const tw=ocrCleanName(rw&&rw.data&&rw.data.text).replace(/\s+/g,'');if(tw)parts.push(tw)}
+          if(parts.length===wl.length)name=parts.join(' ')}catch(e){}
+        try{await worker.setParameters({tessedit_pageseg_mode:'7',preserve_interword_spaces:'1'})}catch(e){}}
       if(name.length>=3&&/[\u0600-\u06FF]{2,}/.test(name))out.push(ocrFixName(name))}
   }finally{try{await worker.terminate()}catch(e){}}
   return out}
