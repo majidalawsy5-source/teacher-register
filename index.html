@@ -259,7 +259,7 @@ function renderStudents(){
  if(!c)return `<section class="panel"><div class="empty">لا توجد شعبة محددة لهذه المرحلة. أضف شعبة من تبويب الرئيسية، أو اختر مرحلة أخرى.</div></section>`;
  const labels=['شفهي ١ ف١','شهر ١ ف١','شفهي ٢ ف١','شهر ٢ ف١','معدل ف١','نصف السنة','شفهي ١ ف٢','شهر ١ ف٢','شفهي ٢ ف٢','شهر ٢ ف٢','معدل ف٢','السعي السنوي'];
  return `<section class="panel print-area">
- <div class="title-row no-print"><div><div class="title">قائمة أسماء الطلاب والدرجات</div><div class="hint">الدرجات من ٠ إلى ١٠٠ • الحقول المحسوبة تتحدث تلقائياً</div></div><div class="toolbar"><button class="btn primary" id="addStudent">＋ إضافة اسم</button><input id="studentFile" class="hidden" type="file" accept=".txt,.doc,.docx,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><input id="studentImageFile" class="hidden" type="file" accept="image/*" capture="environment"></div></div>
+ <div class="title-row no-print"><div><div class="title">قائمة أسماء الطلاب والدرجات</div><div class="hint">الدرجات من ٠ إلى ١٠٠ • الحقول المحسوبة تتحدث تلقائياً</div></div><div class="toolbar"><button class="btn primary" id="addStudent">＋ إضافة اسم</button><input id="studentFile" class="hidden" type="file" accept=".txt,.doc,.docx,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"><input id="studentImageFile" class="hidden" type="file" accept="image/*" capture="environment"><input id="studentImageGallery" class="hidden" type="file" accept="image/*"></div></div>
  <div class="toolbar no-print" style="margin-bottom:9px"><button class="btn soft" id="printCustomize">🖨️ طباعة مخصصة</button><button class="btn soft" id="printAll">🖨️ طباعة الجدول</button><label class="small" style="display:flex;align-items:center;gap:7px">عرض الاسم <input id="nameColWidth" type="range" min="120" max="500" step="5" value="${state.meta.nameColWidth||220}" style="width:170px"> <b id="nameColWidthValue">${arabicDigits(state.meta.nameColWidth||220)} px</b></label><span class="hint">لا يطبع حقل الملاحظات.</span></div>
  <div class="table-wrap"><table class="grade-table" style="--name-col-width:${state.meta.nameColWidth||220}px"><thead><tr class="print-repeat print-meta-row"><th colspan="18"><div class="print-head"><h1>${esc(state.meta.school)}</h1><div class="meta">المدرس: ${esc(state.meta.teacher)} | المادة: ${esc(state.meta.subject)} | المرحلة: ${esc(activeStage().name)}${c?` | الشعبة: ${esc(c.name)}`:''}</div></div></th></tr><tr><th>ت</th><th class="name-cell">اسم الطالب</th>${labels.map((x,i)=>headerCell(x,i)).join('')}<th class="event-cell no-print">💢 / ❎ / ❌</th><th class="note-cell">الملاحظات</th><th class="no-print photo-btn">الصورة</th><th class="no-print">حذف</th></tr></thead><tbody>${c.students.map((st,i)=>studentRow(st,i)).join('')}${c.students.length?'':`<tr><td colspan="18"><div class="empty">لم تتم إضافة طلاب بعد.</div></td></tr>`}</tbody><tfoot><tr><th colspan="4" class="no-print"></th><th class="stat-under">${renderStatMini(c,4)}</th><th class="stat-under">${renderStatMini(c,5)}</th><th colspan="4" class="no-print"></th><th class="stat-under">${renderStatMini(c,10)}</th><th class="stat-under">${renderStatMini(c,11)}</th><th colspan="4" class="no-print"></th></tr></tfoot></table></div></section>`
 }
@@ -384,13 +384,15 @@ function searchStudent(q){const box=$('#searchResult');if(!box)return;const qq=n
 
 function bindStudents(){
  $('#addStudent')?.addEventListener('click',()=>openAddNameMenu());
- $('#studentImageFile')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{await extractNamesFromImage(f)}catch(err){alert('تعذر استخراج الأسماء من الصورة: '+(err?.message||err))}e.target.value=''});
+ ['#studentImageFile','#studentImageGallery'].forEach(sel=>$(sel)?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{await extractNamesFromImage(f)}catch(err){alert('تعذر استخراج الأسماء من الصورة: '+(err?.message||err))}e.target.value=''}));
  $('#studentFile')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{const names=await parseNameFile(f);showNamesReview(names,'مراجعة الأسماء المستوردة')}catch(err){alert('تعذر قراءة الملف: '+err.message)}e.target.value=''});
 function openAddNameMenu(){
- confirmModal('إضافة اسم',`<div class="hint" style="margin-bottom:10px">اختر طريقة إضافة أسماء الطلاب إلى ${esc(activeStage()?.name||'المرحلة')} — ${esc(activeClass()?.name||'الشعبة')}</div><div style="display:grid;gap:9px"><button type="button" class="btn primary" id="addNameManual" style="justify-content:flex-start">✍️ إضافة اسم يدويًا أو بالإملاء الصوتي</button><button type="button" class="btn dark" id="addNamesFile" style="justify-content:flex-start">📄 استيراد أسماء من ملف TXT أو Word</button><button type="button" class="btn green" id="addNamesImage" style="justify-content:flex-start">📷 استخراج أسماء من صورة</button></div><div class="notice warn">التعرف على الخط العربي اليدوي قد يخطئ. ستتمكن من مراجعة الأسماء وتعديلها قبل حفظها.</div>`,[{text:'إغلاق',kind:'soft'}]);
+ confirmModal('إضافة اسم',`<div class="hint" style="margin-bottom:10px">اختر طريقة إضافة أسماء الطلاب إلى ${esc(activeStage()?.name||'المرحلة')} — ${esc(activeClass()?.name||'الشعبة')}</div><div style="display:grid;gap:9px"><button type="button" class="btn primary" id="addNameManual" style="justify-content:flex-start">✍️ إضافة اسم يدويًا أو بالإملاء الصوتي</button><button type="button" class="btn dark" id="addNamesFile" style="justify-content:flex-start">📄 استيراد أسماء من ملف TXT أو Word</button><button type="button" class="btn green" id="addNamesCamera" style="justify-content:flex-start">📷 التقاط صورة للأسماء</button><button type="button" class="btn green" id="addNamesGallery" style="justify-content:flex-start">🖼️ اختيار صورة من الاستوديو</button><button type="button" class="btn soft" id="gemSetupBtn" style="justify-content:flex-start">✨ إعداد Gemini (قراءة أدق للأسماء)</button></div><div class="notice warn">التعرف على الخط العربي اليدوي قد يخطئ. ستتمكن من مراجعة الأسماء وتعديلها قبل حفظها.</div>`,[{text:'إغلاق',kind:'soft'}]);
  $('#addNameManual')?.addEventListener('click',()=>{closeModal();studentNameModal()});
  $('#addNamesFile')?.addEventListener('click',()=>{closeModal();$('#studentFile')?.click()});
- $('#addNamesImage')?.addEventListener('click',()=>{closeModal();$('#studentImageFile')?.click()});
+ $('#addNamesCamera')?.addEventListener('click',()=>{closeModal();$('#studentImageFile')?.click()});
+ $('#addNamesGallery')?.addEventListener('click',()=>{closeModal();$('#studentImageGallery')?.click()});
+ $('#gemSetupBtn')?.addEventListener('click',()=>{closeModal();gemSetupModal(null)});
 }
 function showNamesReview(names,title='مراجعة الأسماء قبل الحفظ'){
  const cleaned=(names||[]).map(x=>String(x||'').replace(/^\s*[\d٠-٩۰-۹]+\s*[.、)\-:]?\s*/,'').trim()).filter(Boolean);
@@ -565,6 +567,81 @@ function ocrFixName(name){
 }
 
 function ocrCleanName(t){return String(t||'').replace(/[\u064B-\u065F\u0670\u06D6-\u06ED]/g,'').replace(/[\u0660-\u0669\u06F0-\u06F9\u0640\u060C\u061B\u061F\u066A-\u066D]/g,' ').replace(/[^\u0600-\u06FF\s]/g,' ').replace(/\s+/g,' ').trim()}
+// ===== تنظيف معاينة الصورة (خلفية بيضاء وأسماء سوداء بلا خطوط جدول) =====
+function ocrWipeNonPaper(gray,bin,W,H){
+  const med=new Float32Array(W),tmp=new Uint8Array(Math.ceil(H/4)+1);
+  for(let x=0;x<W;x++){let n=0;for(let y=0;y<H;y+=4)tmp[n++]=gray[y*W+x];const arr=Array.prototype.slice.call(tmp,0,n).sort((p,q)=>p-q);med[x]=arr[n>>1]}
+  const sm=new Float32Array(W);for(let x=0;x<W;x++){let a=0,c=0;for(let k=-6;k<=6;k++){const xx=x+k;if(xx>=0&&xx<W){a+=med[xx];c++}}sm[x]=a/c}
+  const ctr=Array.prototype.slice.call(sm,Math.floor(W*0.25),Math.ceil(W*0.75)).sort((p,q)=>p-q),th=0.75*ctr[ctr.length>>1];
+  const wipe=(a,b)=>{a=Math.max(0,a);b=Math.min(W-1,b);for(let y=0;y<H;y++)for(let x=a;x<=b;x++)bin[y*W+x]=0};
+  let leftEnd=-1,rightStart=W;
+  for(let x=0;x<W;){if(sm[x]>=th){x++;continue}let e=x;while(e+1<W&&sm[e+1]<th)e++;
+    if(e-x+1>=Math.max(10,W*0.06)){if(x>=W*0.5)rightStart=Math.min(rightStart,x);else if(e<W*0.5)leftEnd=Math.max(leftEnd,e)}
+    x=e+1}
+  if(rightStart<W)wipe(rightStart-3,W-1);if(leftEnd>=0)wipe(0,leftEnd+3)}
+function ocrCleanedPreview(image){
+  const sc=Math.min(1,1600/Math.max(image.naturalWidth,image.naturalHeight)),W=Math.max(8,Math.round(image.naturalWidth*sc)),H=Math.max(8,Math.round(image.naturalHeight*sc));
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});
+  x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(image,0,0,W,H);
+  const d=x.getImageData(0,0,W,H).data,gray=new Uint8Array(W*H);for(let i=0,j=0;i<d.length;i+=4,j++)gray[j]=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);
+  const bin=ocrAdaptiveBinary(gray,W,H);ocrWipeNonPaper(gray,bin,W,H);ocrEraseRules(bin,W,H);ocrKillSlantedRules(bin,W,H);
+  const out=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=bin[i]?0:255;out.data[i*4]=out.data[i*4+1]=out.data[i*4+2]=v;out.data[i*4+3]=255}
+  x.putImageData(out,0,0);return c}
+
+// ===== قراءة الأسماء بواسطة Gemini (اختياري؛ يحتاج مفتاحاً مجانياً من Google AI Studio) =====
+const GEM_BASE='https://generativelanguage.googleapis.com/v1beta';
+async function gemGetCfg(){try{return (await idbGet('geminiCfg'))||null}catch(e){return null}}
+async function gemSetCfg(c){await idbSet('geminiCfg',c)}
+async function gemFetch(path,key,body){
+  const r=await fetch(GEM_BASE+path,{method:body?'POST':'GET',headers:Object.assign({'x-goog-api-key':key},body?{'Content-Type':'application/json'}:{}),body:body?JSON.stringify(body):undefined});
+  if(!r.ok){let t='';try{t=await r.text()}catch(e){}const e=new Error('HTTP '+r.status);e.status=r.status;e.body=t;throw e}
+  return r.json()}
+function gemExplain(e){
+  const st=e&&e.status,b=(e&&e.body)||'';
+  if(e&&e.message==='NO_NAMES')return 'لم يقرأ Gemini أسماء من هذه المنطقة. تأكد أن الإطار يشمل الأسماء.';
+  if(st===400&&/API key/i.test(b))return 'مفتاح Gemini غير صحيح.';
+  if(st===400)return 'رفض Gemini الطلب. '+b.slice(0,140);
+  if(st===401||st===403)return 'المفتاح غير مصرّح له، أو الخدمة غير متاحة لحسابك أو منطقتك.';
+  if(st===404)return 'اسم النموذج غير صحيح. غيّره من إعداد Gemini.';
+  if(st===429)return 'تجاوزت الحد المجاني لاستخدام Gemini. انتظر قليلاً ثم حاول.';
+  if(st&&st>=500)return 'خدمة Gemini مشغولة حالياً، حاول بعد قليل.';
+  if(e&&e.name==='TypeError')return 'تعذّر الاتصال بـ Gemini. تأكد من الإنترنت.';
+  return 'خطأ: '+((e&&e.message)||e)}
+async function gemModel(cfg){
+  if(cfg.model)return cfg.model;
+  if(cfg.picked&&Date.now()-(cfg.pickedAt||0)<7*864e5)return cfg.picked;
+  try{const j=await gemFetch('/models?pageSize=200',cfg.key);
+    const list=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>{const x=/^models\/gemini-(\d+(?:\.\d+)?)-flash$/.exec(m.name);return x?{n:m.name.slice(7),v:parseFloat(x[1])}:null}).filter(Boolean).sort((p,q)=>q.v-p.v);
+    if(list.length){cfg.picked=list[0].n;cfg.pickedAt=Date.now();await gemSetCfg(cfg);return cfg.picked}}catch(e){}
+  return 'gemini-flash-latest'}
+const GEM_PROMPT='هذه صورة لقائمة أسماء طلاب (مطبوعة أو بخط اليد). استخرج أسماء الطلاب فقط بالترتيب من الأعلى إلى الأسفل. اكتب كل اسم كاملاً بكل كلماته كعنصر واحد. تجاهل الأرقام والعناوين والملاحظات وأي نص ليس اسم طالب. اكتب الأسماء بالعربية كما هي مكتوبة دون ترجمة أو تغيير في الإملاء، وأعطِ أفضل قراءة للأسماء غير الواضحة. أعد النتيجة مصفوفة JSON من النصوص فقط.';
+async function gemExtractNames(image,l,r,t,b,status){
+  const cfg=await gemGetCfg();if(!cfg||!cfg.key)throw new Error('NO_KEY');
+  status.textContent='جارٍ تجهيز الصورة…';
+  const sx=Math.round(image.naturalWidth*l/100),sy=Math.round(image.naturalHeight*t/100),sw=Math.max(8,Math.round(image.naturalWidth*(r-l)/100)),sh=Math.max(8,Math.round(image.naturalHeight*(b-t)/100));
+  const sc=Math.min(1,1800/Math.max(sw,sh)),cv=document.createElement('canvas');cv.width=Math.max(8,Math.round(sw*sc));cv.height=Math.max(8,Math.round(sh*sc));
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality='high';cx.drawImage(image,sx,sy,sw,sh,0,0,cv.width,cv.height);
+  const b64=cv.toDataURL('image/jpeg',0.88).split(',')[1],model=await gemModel(cfg);
+  status.textContent='جارٍ قراءة الأسماء بواسطة Gemini…';
+  const j=await gemFetch(`/models/${model}:generateContent`,cfg.key,{contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:b64}},{text:GEM_PROMPT}]}],generationConfig:{temperature:0,responseMimeType:'application/json',responseSchema:{type:'ARRAY',items:{type:'STRING'}}}});
+  const parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[],text=parts.map(p=>p.text||'').join('');
+  let arr;try{arr=JSON.parse(text)}catch(e){arr=String(text).split(/\r?\n/)}
+  if(!Array.isArray(arr))arr=[];
+  const names=arr.map(x=>ocrCleanName(String(x))).filter(x=>x.length>=3&&/[\u0600-\u06FF]{2,}/.test(x));
+  if(!names.length)throw new Error('NO_NAMES');
+  return names}
+function gemSetupModal(after){
+  gemGetCfg().then(cfg=>{
+    confirmModal('✨ إعداد قراءة الأسماء بـ Gemini',`<div class="notice warn">عند الاستخدام تُرسل <b>صورة منطقة الأسماء فقط</b> إلى خوادم Google لقراءتها. في الباقة المجانية قد تستخدم Google المحتوى لتحسين منتجاتها، وفي الباقة المدفوعة لا تفعل. أسماء الطلاب بيانات شخصية، فاستعمل الميزة إذا كان هذا مقبولاً لديك. المفتاح يُحفظ على جهازك فقط ولا يدخل النسخ الاحتياطية.</div><div class="hint" style="margin:8px 0">للحصول على مفتاح مجاني: افتح <b dir="ltr">aistudio.google.com/apikey</b> وسجّل بحساب Google واضغط <b>Create API key</b> ثم انسخه.</div><label class="hint">مفتاح Gemini API</label><input id="gmKey" type="password" autocomplete="off" style="width:100%;direction:ltr" value="${cfg&&cfg.key?'••••••••••••':''}" placeholder="AIza…"><label class="hint" style="margin-top:8px;display:block">اسم النموذج (اتركه فارغاً ليختار التطبيق الأحدث تلقائياً)</label><input id="gmModel" type="text" style="width:100%;direction:ltr" value="${esc((cfg&&cfg.model)||'')}" placeholder="مثال: gemini-3.5-flash"><div class="hint" id="gmMsg" style="margin-top:8px;color:#b42318"></div>`,[
+      {text:'حفظ واختبار',kind:'primary',fn:async()=>{const msg=t=>{const m=document.getElementById('gmMsg');if(m)m.textContent=t};
+        let key=document.getElementById('gmKey').value.trim();if(/^•+$/.test(key)&&cfg)key=cfg.key;
+        if(key.length<20){msg('أدخل مفتاح Gemini كاملاً.');return}
+        const model=document.getElementById('gmModel').value.trim();msg('جارٍ الاختبار…');
+        try{await gemFetch('/models?pageSize=1',key);const c={key,model:model||'',picked:'',pickedAt:0};await gemSetCfg(c);closeModal();toast('تم حفظ مفتاح Gemini');if(after)after()}catch(e){msg(gemExplain(e))}}},
+      {text:'حذف المفتاح',kind:'soft',fn:async()=>{try{await idbSet('geminiCfg',null)}catch(e){}closeModal();toast('تم حذف المفتاح')}},
+      {text:'إغلاق',kind:'soft',fn:()=>closeModal()}],false)})}
+
+
 async function ocrByLines(image,l,r,t,b,status){
   const say=m=>{if(status)status.textContent=m};
   say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
@@ -591,8 +668,17 @@ async function ocrByLines(image,l,r,t,b,status){
 async function extractNamesFromImage(file){
  const image=await new Promise((resolve,reject)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('تعذر فتح الصورة'))};img.src=url});
  let left=38,right=90,top=0,bottom=100;
+ let cleanCanvas=null,showClean=true;
+ const drawPreview=()=>{const sp=$('#ocrSourcePreview');if(!sp)return;const ctx=sp.getContext('2d');ctx.clearRect(0,0,sp.width,sp.height);if(showClean&&cleanCanvas)ctx.drawImage(cleanCanvas,0,0,sp.width,sp.height);else ctx.drawImage(image,0,0)};
+ const togglePreview=async()=>{if(!cleanCanvas){const st=$('#ocrStatus');if(st)st.textContent='جارٍ تنظيف الصورة…';await new Promise(r=>setTimeout(r,30));try{cleanCanvas=ocrCleanedPreview(image)}catch(e){}if(st)st.textContent='سيتم تكبير المنطقة المحددة وتحسين التباين.';if(cleanCanvas){showClean=true;drawPreview();return}}showClean=!showClean;drawPreview()};
+ const geminiAction=async()=>{const status=$('#ocrStatus');try{
+   const cfg=await gemGetCfg();if(!cfg||!cfg.key){gemSetupModal(()=>extractNamesFromImage(file));return}
+   const named=await gemExtractNames(image,left,right,top,bottom,status);closeModal();showNamesReview(named,'مراجعة الأسماء (قراءة Gemini) — راجعها قبل الحفظ')
+  }catch(err){if(status)status.textContent=gemExplain(err)+' — يمكنك استخدام «القراءة المحلية».'}};
  confirmModal('تحديد منطقة أسماء الطلاب',`<div class="hint" style="margin-bottom:8px">اسحب الإطار لتحديد منطقة الأسماء. اسحب من داخل الإطار لتحريكه، أو اسحب مقابض الزوايا والجوانب لتغيير حجمه. اجعل الإطار يشمل الأسماء كاملة دون عمود الأرقام.</div><div style="display:grid;gap:8px"><div id="ocrCropStage" style="position:relative;width:100%;max-height:390px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:#f5f6f8;touch-action:none;user-select:none"><canvas id="ocrSourcePreview" style="display:block;width:100%;height:auto;max-height:390px;object-fit:contain"></canvas><div id="ocrCropBox" style="position:absolute;left:${left}%;top:${top}%;width:${right-left}%;height:${bottom-top}%;border:2px solid #1683ff;background:rgba(22,131,255,.10);box-shadow:0 0 0 9999px rgba(0,0,0,.38);box-sizing:border-box;touch-action:none;cursor:move"><span data-crop-handle="nw" style="position:absolute;left:-7px;top:-7px"></span><span data-crop-handle="ne" style="position:absolute;right:-7px;top:-7px"></span><span data-crop-handle="sw" style="position:absolute;left:-7px;bottom:-7px"></span><span data-crop-handle="se" style="position:absolute;right:-7px;bottom:-7px"></span><span data-crop-handle="n" style="position:absolute;left:50%;top:-6px;transform:translateX(-50%)"></span><span data-crop-handle="s" style="position:absolute;left:50%;bottom:-6px;transform:translateX(-50%)"></span><span data-crop-handle="w" style="position:absolute;left:-6px;top:50%;transform:translateY(-50%)"></span><span data-crop-handle="e" style="position:absolute;right:-6px;top:50%;transform:translateY(-50%)"></span></div></div><div class="hint">حدود الاقتصاص: أفقي <b id="ocrCropX">${left}–${right}%</b>، عمودي <b id="ocrCropY">${top}–${bottom}%</b></div><canvas id="ocrPreview" style="display:none"></canvas><div id="ocrStatus" class="notice">سيتم تكبير المنطقة المحددة وتحسين التباين وإجراء أكثر من محاولة للتعرف على الأسماء.</div></div>`,[
- {text:'استخراج الأسماء من العمود',kind:'primary',fn:async()=>{const status=$('#ocrStatus');try{
+ {text:'✨ استخراج بـ Gemini (أدق)',kind:'primary',fn:geminiAction},
+ {text:'🧹 تبديل: صورة منظّفة ⇄ أصلية',kind:'soft',fn:togglePreview},
+ {text:'استخراج بالقراءة المحلية',kind:'dark',fn:async()=>{const status=$('#ocrStatus');try{
   if(!window.Tesseract){status.textContent='جارٍ تحميل مكتبة التعرف على النصوص...';await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('تعذر تحميل مكتبة OCR. اتصل بالإنترنت ثم حاول مجدداً.'));document.head.appendChild(sc)})}
   try{const named=await ocrByLines(image,left,right,top,bottom,status);if(named.length){closeModal();showNamesReview(named,'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');return}}catch(e){console.warn('line OCR failed',e);if(status)status.textContent='جارٍ المحاولة بطريقة ثانية…'}
   const source=$('#ocrPreview');if(!source||!source.width||!source.height)throw new Error('معاينة الصورة غير جاهزة');
@@ -632,6 +718,7 @@ async function extractNamesFromImage(file){
  stage?.addEventListener('pointermove',e=>{if(!drag)return;const p=point(e),dx=p.x-drag.x,dy=p.y-drag.y,m=drag.mode;let l=drag.l,r=drag.r,t=drag.t,b=drag.b;if(m==='move'){const w=r-l,h=b-t;l=Math.max(0,Math.min(100-w,l+dx));r=l+w;t=Math.max(0,Math.min(100-h,t+dy));b=t+h}else{if(m.includes('w'))l=Math.max(0,Math.min(r-3,l+dx));if(m.includes('e'))r=Math.max(l+3,Math.min(100,r+dx));if(m.includes('n'))t=Math.max(0,Math.min(b-3,t+dy));if(m.includes('s'))b=Math.max(t+3,Math.min(100,b+dy))}left=l;right=r;top=t;bottom=b;paintCrop()});
  const stopDrag=()=>{drag=null};stage?.addEventListener('pointerup',stopDrag);stage?.addEventListener('pointercancel',stopDrag);
  box?.querySelectorAll('[data-crop-handle]').forEach(h=>{h.style.cssText+=';width:14px;height:14px;border:2px solid #0875e1;border-radius:4px;background:#fff;z-index:2;touch-action:none;cursor:nwse-resize'});paintCrop();
+ setTimeout(async()=>{try{await togglePreview()}catch(e){}},80);
 }
 function studentNameModal(){
   confirmModal('إضافة طالب',`<label class="small">اسم الطالب</label><div class="voice-input-wrap"><input id="modalInput" autocomplete="off" value="" placeholder="اكتب اسم الطالب أو اضغط 🎙️"><button type="button" class="voice-btn" id="voiceNameBtn" aria-label="إملاء اسم الطالب">🎙️</button></div><div id="voiceStatus" class="hint voice-status">اضغط 🎙️ وتحدث بالعربية</div>`,[
