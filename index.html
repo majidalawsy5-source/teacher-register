@@ -632,16 +632,16 @@ async function gemExtractNames(image,l,r,t,b,status){
   return names}
 function gemSetupModal(after){
   gemGetCfg().then(cfg=>{
-    confirmModal('✨ إعداد قراءة الأسماء بـ Gemini',`<div class="notice warn">عند الاستخدام تُرسل <b>صورة منطقة الأسماء فقط</b> إلى خوادم Google لقراءتها. في الباقة المجانية قد تستخدم Google المحتوى لتحسين منتجاتها، وفي الباقة المدفوعة لا تفعل. أسماء الطلاب بيانات شخصية، فاستعمل الميزة إذا كان هذا مقبولاً لديك. المفتاح يُحفظ على جهازك فقط ولا يدخل النسخ الاحتياطية.</div><div class="hint" style="margin:8px 0">للحصول على مفتاح مجاني: افتح <b dir="ltr">aistudio.google.com/apikey</b> وسجّل بحساب Google واضغط <b>Create API key</b> ثم انسخه.</div><label class="hint">مفتاح Gemini API</label><input id="gmKey" type="password" autocomplete="off" style="width:100%;direction:ltr" value="${cfg&&cfg.key?'••••••••••••':''}" placeholder="AIza…"><label class="hint" style="margin-top:8px;display:block">اسم النموذج (اتركه فارغاً ليختار التطبيق الأحدث تلقائياً)</label><input id="gmModel" type="text" style="width:100%;direction:ltr" value="${esc((cfg&&cfg.model)||'')}" placeholder="مثال: gemini-3.5-flash"><div class="hint" id="gmMsg" style="margin-top:8px;color:#b42318"></div>`,[
-      {text:'حفظ واختبار',kind:'primary',fn:async()=>{const msg=t=>{const m=document.getElementById('gmMsg');if(m)m.textContent=t};
+    const has=!!(cfg&&cfg.key);
+    confirmModal('✨ تفعيل Gemini (مرة واحدة)',`<div class="notice" style="line-height:1.9">Gemini يقرأ الأسماء من الصورة بدقة أعلى، ويحتاج <b>مفتاحاً مجانياً</b> من Google (مثل كلمة سر خاصة بك). تحصل عليه مرة وحدة:<br><b>1)</b> اضغط «فتح صفحة المفتاح» وسجّل بحساب Google.<br><b>2)</b> اضغط <b dir="ltr">Create API key</b> ثم انسخ المفتاح.<br><b>3)</b> ارجع هنا والصقه بالخانة.</div><input id="gmKey" type="password" autocomplete="off" style="width:100%;direction:ltr;margin-top:10px" value="${has?'••••••••••••':''}" placeholder="الصق المفتاح هنا"><div class="hint" style="margin-top:8px">تُرسل لـ Google صورة منطقة الأسماء فقط. (بالباقة المجانية قد تستخدمها Google لتحسين منتجاتها.)</div><div class="hint" id="gmMsg" style="margin-top:6px;color:#b42318"></div>`,[
+      {text:'حفظ وتفعيل',kind:'primary',fn:async()=>{const msg=t=>{const m=document.getElementById('gmMsg');if(m)m.textContent=t};
         let key=document.getElementById('gmKey').value.trim();if(/^•+$/.test(key)&&cfg)key=cfg.key;
-        if(key.length<20){msg('أدخل مفتاح Gemini كاملاً.');return}
-        const model=document.getElementById('gmModel').value.trim();msg('جارٍ الاختبار…');
-        try{await gemFetch('/models?pageSize=1',key);const c={key,model:model||'',picked:'',pickedAt:0};await gemSetCfg(c);closeModal();toast('تم حفظ مفتاح Gemini');if(after)after()}catch(e){msg(gemExplain(e))}}},
-      {text:'حذف المفتاح',kind:'soft',fn:async()=>{try{await idbSet('geminiCfg',null)}catch(e){}closeModal();toast('تم حذف المفتاح')}},
+        if(key.length<20){msg('الصق المفتاح كاملاً.');return}
+        msg('جارٍ التحقق…');
+        try{await gemFetch('/models?pageSize=1',key);await gemSetCfg({key,model:(cfg&&cfg.model)||'',picked:'',pickedAt:0});closeModal();toast('تم تفعيل Gemini');if(after)after()}catch(e){msg(gemExplain(e))}}},
+      {text:'🔗 فتح صفحة المفتاح',kind:'soft',fn:()=>{window.open('https://aistudio.google.com/apikey','_blank')}},
+      ...(has?[{text:'إيقاف Gemini',kind:'soft',fn:async()=>{try{await idbSet('geminiCfg',null)}catch(e){}closeModal();toast('تم إيقاف Gemini')}}]:[]),
       {text:'إغلاق',kind:'soft',fn:()=>closeModal()}],false)})}
-
-
 async function ocrByLines(image,l,r,t,b,status){
   const say=m=>{if(status)status.textContent=m};
   say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
