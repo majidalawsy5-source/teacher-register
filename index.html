@@ -387,12 +387,11 @@ function bindStudents(){
  ['#studentImageFile','#studentImageGallery'].forEach(sel=>$(sel)?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{await extractNamesFromImage(f)}catch(err){alert('تعذر استخراج الأسماء من الصورة: '+(err?.message||err))}e.target.value=''}));
  $('#studentFile')?.addEventListener('change',async e=>{const f=e.target.files?.[0];if(!f)return;try{const names=await parseNameFile(f);showNamesReview(names,'مراجعة الأسماء المستوردة')}catch(err){alert('تعذر قراءة الملف: '+err.message)}e.target.value=''});
 function openAddNameMenu(){
- confirmModal('إضافة اسم',`<div class="hint" style="margin-bottom:10px">اختر طريقة إضافة أسماء الطلاب إلى ${esc(activeStage()?.name||'المرحلة')} — ${esc(activeClass()?.name||'الشعبة')}</div><div style="display:grid;gap:9px"><button type="button" class="btn primary" id="addNameManual" style="justify-content:flex-start">✍️ إضافة اسم يدويًا أو بالإملاء الصوتي</button><button type="button" class="btn dark" id="addNamesFile" style="justify-content:flex-start">📄 استيراد أسماء من ملف TXT أو Word</button><button type="button" class="btn green" id="addNamesCamera" style="justify-content:flex-start">📷 التقاط صورة للأسماء</button><button type="button" class="btn green" id="addNamesGallery" style="justify-content:flex-start">🖼️ اختيار صورة من الاستوديو</button><button type="button" class="btn soft" id="gemSetupBtn" style="justify-content:flex-start">✨ إعداد Gemini (قراءة أدق للأسماء)</button></div><div class="notice warn">التعرف على الخط العربي اليدوي قد يخطئ. ستتمكن من مراجعة الأسماء وتعديلها قبل حفظها.</div>`,[{text:'إغلاق',kind:'soft'}]);
+ confirmModal('إضافة اسم',`<div class="hint" style="margin-bottom:10px">اختر طريقة إضافة أسماء الطلاب إلى ${esc(activeStage()?.name||'المرحلة')} — ${esc(activeClass()?.name||'الشعبة')}</div><div style="display:grid;gap:9px"><button type="button" class="btn primary" id="addNameManual" style="justify-content:flex-start">✍️ إضافة اسم يدويًا أو بالإملاء الصوتي</button><button type="button" class="btn dark" id="addNamesFile" style="justify-content:flex-start">📄 استيراد أسماء من ملف TXT أو Word</button><button type="button" class="btn green" id="addNamesCamera" style="justify-content:flex-start">📷 التقاط صورة للأسماء</button><button type="button" class="btn green" id="addNamesGallery" style="justify-content:flex-start">🖼️ اختيار صورة من الاستوديو</button></div><div class="notice warn">التعرف على الخط العربي اليدوي قد يخطئ. ستتمكن من مراجعة الأسماء وتعديلها قبل حفظها.</div>`,[{text:'إغلاق',kind:'soft'}]);
  $('#addNameManual')?.addEventListener('click',()=>{closeModal();studentNameModal()});
  $('#addNamesFile')?.addEventListener('click',()=>{closeModal();$('#studentFile')?.click()});
  $('#addNamesCamera')?.addEventListener('click',()=>{closeModal();$('#studentImageFile')?.click()});
  $('#addNamesGallery')?.addEventListener('click',()=>{closeModal();$('#studentImageGallery')?.click()});
- $('#gemSetupBtn')?.addEventListener('click',()=>{closeModal();gemSetupModal(null)});
 }
 function showNamesReview(names,title='مراجعة الأسماء قبل الحفظ'){
  const cleaned=(names||[]).map(x=>String(x||'').replace(/^\s*[\d٠-٩۰-۹]+\s*[.、)\-:]?\s*/,'').trim()).filter(Boolean);
@@ -428,10 +427,10 @@ function ocrEraseRules(bin,W,H){
   cc.forEach(x=>{for(let k=-1;k<=1;k++){const xx=x+k;if(xx>=0&&xx<W)for(let y=0;y<H;y++)bin[y*W+xx]=0}});
   return {rows:rr.length,cols:cc.length}}
 // إزالة خطوط الجدول المائلة قليلاً (التي تفلت من الإزالة العادية) ثم البقايا الرفيعة، حتى لا تلتصق الأسطر ببعضها
-function ocrKillSlantedRules(bin,W,H){
+function ocrKillSlantedRules(bin,W,H,kf){
   const mask=new Uint8Array(W*H);
   // خطوط أفقية بميلان مختلف (الصورة قد تكون مائلة أو بمنظور): نمشي على مسارات مائلة ونبحث عن حبر متصل طويل
-  const K=Math.max(80,Math.round(W*0.55)),ink=(x,y)=>y>=0&&y<H&&(bin[y*W+x]||(y>0&&bin[(y-1)*W+x])||(y<H-1&&bin[(y+1)*W+x]));
+  const K=Math.max(80,Math.round(W*(kf||0.55))),ink=(x,y)=>y>=0&&y<H&&(bin[y*W+x]||(y>0&&bin[(y-1)*W+x])||(y<H-1&&bin[(y+1)*W+x]));
   for(let si=-6;si<=6;si++){const sl=si*0.007,off=Math.abs(sl)*W/2;
     for(let y0=Math.floor(-off);y0<H+off;y0++){let st=-1;
       for(let x=0;x<=W;x++){let on=false,y=0;if(x<W){y=y0+Math.round(sl*(x-W/2));on=y>=0&&y<H&&ink(x,y)}
@@ -584,68 +583,24 @@ function ocrCleanedPreview(image){
   const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});
   x.fillStyle='#fff';x.fillRect(0,0,W,H);x.imageSmoothingQuality='high';x.drawImage(image,0,0,W,H);
   const d=x.getImageData(0,0,W,H).data,gray=new Uint8Array(W*H);for(let i=0,j=0;i<d.length;i+=4,j++)gray[j]=Math.round(.299*d[i]+.587*d[i+1]+.114*d[i+2]);
-  const bin=ocrAdaptiveBinary(gray,W,H);ocrWipeNonPaper(gray,bin,W,H);ocrEraseRules(bin,W,H);ocrKillSlantedRules(bin,W,H);
-  const out=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=bin[i]?0:255;out.data[i*4]=out.data[i*4+1]=out.data[i*4+2]=v;out.data[i*4+3]=255}
+  const bin=ocrAdaptiveBinary(gray,W,H);ocrWipeNonPaper(gray,bin,W,H);ocrEraseRules(bin,W,H);ocrKillSlantedRules(bin,W,H,0.28);
+  // بقايا: شُرط أفقية قصيرة، خطوط عمودية رفيعة، وبقع صغيرة جداً
+  {const lab=new Uint8Array(W*H),st=[];for(let y0=0;y0<H;y0++)for(let x0=0;x0<W;x0++){const p0=y0*W+x0;if(!bin[p0]||lab[p0])continue;let mnx=x0,mxx=x0,mny=y0,mxy=y0;const pix=[p0];lab[p0]=1;st.length=0;st.push(p0);
+    while(st.length){const p=st.pop(),y=(p/W)|0,x=p-y*W;if(x<mnx)mnx=x;if(x>mxx)mxx=x;if(y<mny)mny=y;if(y>mxy)mxy=y;for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;for(let dx=-1;dx<=1;dx++){const xx=x+dx;if(xx<0||xx>=W)continue;const q=yy*W+xx;if(bin[q]&&!lab[q]){lab[q]=1;st.push(q);pix.push(q)}}}}
+    const w=mxx-mnx+1,h=mxy-mny+1;if((h<=6&&w>=7)||(w>=60&&w>=10*h)||(w<=5&&h>=40)||pix.length<5)for(const q of pix)bin[q]=0}}
+  // تغميق الكتابة قليلاً لتبرز على الخلفية البيضاء
+  const bold=new Uint8Array(bin);for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const i=y*W+x;if(bin[i]){bold[i-1]=1;bold[i+1]=1;bold[i-W]=1;bold[i+W]=1}}
+  const out=x.createImageData(W,H);for(let i=0;i<W*H;i++){const v=bold[i]?0:255;out.data[i*4]=out.data[i*4+1]=out.data[i*4+2]=v;out.data[i*4+3]=255}
   x.putImageData(out,0,0);return c}
 
-// ===== قراءة الأسماء بواسطة Gemini (اختياري؛ يحتاج مفتاحاً مجانياً من Google AI Studio) =====
-const GEM_BASE='https://generativelanguage.googleapis.com/v1beta';
-async function gemGetCfg(){try{return (await idbGet('geminiCfg'))||null}catch(e){return null}}
-async function gemSetCfg(c){await idbSet('geminiCfg',c)}
-async function gemFetch(path,key,body){
-  const r=await fetch(GEM_BASE+path,{method:body?'POST':'GET',headers:Object.assign({'x-goog-api-key':key},body?{'Content-Type':'application/json'}:{}),body:body?JSON.stringify(body):undefined});
-  if(!r.ok){let t='';try{t=await r.text()}catch(e){}const e=new Error('HTTP '+r.status);e.status=r.status;e.body=t;throw e}
-  return r.json()}
-function gemExplain(e){
-  const st=e&&e.status,b=(e&&e.body)||'';
-  if(e&&e.message==='NO_NAMES')return 'لم يقرأ Gemini أسماء من هذه المنطقة. تأكد أن الإطار يشمل الأسماء.';
-  if(st===400&&/API key/i.test(b))return 'مفتاح Gemini غير صحيح.';
-  if(st===400)return 'رفض Gemini الطلب. '+b.slice(0,140);
-  if(st===401||st===403)return 'المفتاح غير مصرّح له، أو الخدمة غير متاحة لحسابك أو منطقتك.';
-  if(st===404)return 'اسم النموذج غير صحيح. غيّره من إعداد Gemini.';
-  if(st===429)return 'تجاوزت الحد المجاني لاستخدام Gemini. انتظر قليلاً ثم حاول.';
-  if(st&&st>=500)return 'خدمة Gemini مشغولة حالياً، حاول بعد قليل.';
-  if(e&&e.name==='TypeError')return 'تعذّر الاتصال بـ Gemini. تأكد من الإنترنت.';
-  return 'خطأ: '+((e&&e.message)||e)}
-async function gemModel(cfg){
-  if(cfg.model)return cfg.model;
-  if(cfg.picked&&Date.now()-(cfg.pickedAt||0)<7*864e5)return cfg.picked;
-  try{const j=await gemFetch('/models?pageSize=200',cfg.key);
-    const list=(j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')).map(m=>{const x=/^models\/gemini-(\d+(?:\.\d+)?)-flash$/.exec(m.name);return x?{n:m.name.slice(7),v:parseFloat(x[1])}:null}).filter(Boolean).sort((p,q)=>q.v-p.v);
-    if(list.length){cfg.picked=list[0].n;cfg.pickedAt=Date.now();await gemSetCfg(cfg);return cfg.picked}}catch(e){}
-  return 'gemini-flash-latest'}
-const GEM_PROMPT='هذه صورة لقائمة أسماء طلاب (مطبوعة أو بخط اليد). استخرج أسماء الطلاب فقط بالترتيب من الأعلى إلى الأسفل. اكتب كل اسم كاملاً بكل كلماته كعنصر واحد. تجاهل الأرقام والعناوين والملاحظات وأي نص ليس اسم طالب. اكتب الأسماء بالعربية كما هي مكتوبة دون ترجمة أو تغيير في الإملاء، وأعطِ أفضل قراءة للأسماء غير الواضحة. أعد النتيجة مصفوفة JSON من النصوص فقط.';
-async function gemExtractNames(image,l,r,t,b,status){
-  const cfg=await gemGetCfg();if(!cfg||!cfg.key)throw new Error('NO_KEY');
-  status.textContent='جارٍ تجهيز الصورة…';
-  const sx=Math.round(image.naturalWidth*l/100),sy=Math.round(image.naturalHeight*t/100),sw=Math.max(8,Math.round(image.naturalWidth*(r-l)/100)),sh=Math.max(8,Math.round(image.naturalHeight*(b-t)/100));
-  const sc=Math.min(1,1800/Math.max(sw,sh)),cv=document.createElement('canvas');cv.width=Math.max(8,Math.round(sw*sc));cv.height=Math.max(8,Math.round(sh*sc));
-  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.imageSmoothingQuality='high';cx.drawImage(image,sx,sy,sw,sh,0,0,cv.width,cv.height);
-  const b64=cv.toDataURL('image/jpeg',0.88).split(',')[1],model=await gemModel(cfg);
-  status.textContent='جارٍ قراءة الأسماء بواسطة Gemini…';
-  const j=await gemFetch(`/models/${model}:generateContent`,cfg.key,{contents:[{parts:[{inline_data:{mime_type:'image/jpeg',data:b64}},{text:GEM_PROMPT}]}],generationConfig:{temperature:0,responseMimeType:'application/json',responseSchema:{type:'ARRAY',items:{type:'STRING'}}}});
-  const parts=(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[],text=parts.map(p=>p.text||'').join('');
-  let arr;try{arr=JSON.parse(text)}catch(e){arr=String(text).split(/\r?\n/)}
-  if(!Array.isArray(arr))arr=[];
-  const names=arr.map(x=>ocrCleanName(String(x))).filter(x=>x.length>=3&&/[\u0600-\u06FF]{2,}/.test(x));
-  if(!names.length)throw new Error('NO_NAMES');
-  return names}
-function gemSetupModal(after){
-  gemGetCfg().then(cfg=>{
-    const has=!!(cfg&&cfg.key);
-    confirmModal('✨ تفعيل Gemini (مرة واحدة)',`<div class="notice" style="line-height:1.9">Gemini يقرأ الأسماء من الصورة بدقة أعلى، ويحتاج <b>مفتاحاً مجانياً</b> من Google (مثل كلمة سر خاصة بك). تحصل عليه مرة وحدة:<br><b>1)</b> اضغط «فتح صفحة المفتاح» وسجّل بحساب Google.<br><b>2)</b> اضغط <b dir="ltr">Create API key</b> ثم انسخ المفتاح.<br><b>3)</b> ارجع هنا والصقه بالخانة.</div><input id="gmKey" type="password" autocomplete="off" style="width:100%;direction:ltr;margin-top:10px" value="${has?'••••••••••••':''}" placeholder="الصق المفتاح هنا"><div class="hint" style="margin-top:8px">تُرسل لـ Google صورة منطقة الأسماء فقط. (بالباقة المجانية قد تستخدمها Google لتحسين منتجاتها.)</div><div class="hint" id="gmMsg" style="margin-top:6px;color:#b42318"></div>`,[
-      {text:'حفظ وتفعيل',kind:'primary',fn:async()=>{const msg=t=>{const m=document.getElementById('gmMsg');if(m)m.textContent=t};
-        let key=document.getElementById('gmKey').value.trim();if(/^•+$/.test(key)&&cfg)key=cfg.key;
-        if(key.length<20){msg('الصق المفتاح كاملاً.');return}
-        msg('جارٍ التحقق…');
-        try{await gemFetch('/models?pageSize=1',key);await gemSetCfg({key,model:(cfg&&cfg.model)||'',picked:'',pickedAt:0});closeModal();toast('تم تفعيل Gemini');if(after)after()}catch(e){msg(gemExplain(e))}}},
-      {text:'🔗 فتح صفحة المفتاح',kind:'soft',fn:()=>{window.open('https://aistudio.google.com/apikey','_blank')}},
-      ...(has?[{text:'إيقاف Gemini',kind:'soft',fn:async()=>{try{await idbSet('geminiCfg',null)}catch(e){}closeModal();toast('تم إيقاف Gemini')}}]:[]),
-      {text:'إغلاق',kind:'soft',fn:()=>closeModal()}],false)})}
-async function ocrByLines(image,l,r,t,b,status){
+// اختيار أفضل نسخة للقراءة: الأصلية أو المنظّفة (الأكثر اتساقاً في عدد كلمات الأسماء)
+function ocrConsistency(seg){const w=(seg&&seg.info&&seg.info.words)||[];if(w.length<3)return 0;const c={};w.forEach(x=>{c[x]=(c[x]||0)+1});return Math.max(...Object.values(c))/w.length}
+async function ocrByLines(image,l,r,t,b,status,altImage){
   const say=m=>{if(status)status.textContent=m};
   say('تحسين الصورة وفصل الأسماء…');await new Promise(r=>setTimeout(r,30));
-  const {lines,words}=ocrSegmentLines(image,l,r,t,b);
+  let seg=ocrSegmentLines(image,l,r,t,b);
+  if(altImage){try{const seg2=ocrSegmentLines(altImage,l,r,t,b);if(ocrConsistency(seg2)>ocrConsistency(seg)+0.02)seg=seg2}catch(e){}}
+  const {lines,words}=seg;
   if(!lines.length)return [];
   const worker=await window.Tesseract.createWorker('ara',1,{logger:m=>{if(m.status&&/loading|initializ/i.test(m.status))say('تجهيز قارئ النصوص… '+(m.progress!=null?Math.round(m.progress*100)+'%':''))}});
   const out=[];
@@ -669,18 +624,13 @@ async function extractNamesFromImage(file){
  const image=await new Promise((resolve,reject)=>{const url=URL.createObjectURL(file);const img=new Image();img.onload=()=>{URL.revokeObjectURL(url);resolve(img)};img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('تعذر فتح الصورة'))};img.src=url});
  let left=38,right=90,top=0,bottom=100;
  let cleanCanvas=null,showClean=true;
+ const getCleanImage=async()=>{try{if(!cleanCanvas)cleanCanvas=ocrCleanedPreview(image);const im=new Image();im.src=cleanCanvas.toDataURL('image/png');await im.decode();return im}catch(e){return null}};
  const drawPreview=()=>{const sp=$('#ocrSourcePreview');if(!sp)return;const ctx=sp.getContext('2d');ctx.clearRect(0,0,sp.width,sp.height);if(showClean&&cleanCanvas)ctx.drawImage(cleanCanvas,0,0,sp.width,sp.height);else ctx.drawImage(image,0,0)};
  const togglePreview=async()=>{if(!cleanCanvas){const st=$('#ocrStatus');if(st)st.textContent='جارٍ تنظيف الصورة…';await new Promise(r=>setTimeout(r,30));try{cleanCanvas=ocrCleanedPreview(image)}catch(e){}if(st)st.textContent='سيتم تكبير المنطقة المحددة وتحسين التباين.';if(cleanCanvas){showClean=true;drawPreview();return}}showClean=!showClean;drawPreview()};
- const geminiAction=async()=>{const status=$('#ocrStatus');try{
-   const cfg=await gemGetCfg();if(!cfg||!cfg.key){gemSetupModal(()=>extractNamesFromImage(file));return}
-   const named=await gemExtractNames(image,left,right,top,bottom,status);closeModal();showNamesReview(named,'مراجعة الأسماء (قراءة Gemini) — راجعها قبل الحفظ')
-  }catch(err){if(status)status.textContent=gemExplain(err)+' — يمكنك استخدام «القراءة المحلية».'}};
  confirmModal('تحديد منطقة أسماء الطلاب',`<div class="hint" style="margin-bottom:8px">اسحب الإطار لتحديد منطقة الأسماء. اسحب من داخل الإطار لتحريكه، أو اسحب مقابض الزوايا والجوانب لتغيير حجمه. اجعل الإطار يشمل الأسماء كاملة دون عمود الأرقام.</div><div style="display:grid;gap:8px"><div id="ocrCropStage" style="position:relative;width:100%;max-height:390px;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:#f5f6f8;touch-action:none;user-select:none"><canvas id="ocrSourcePreview" style="display:block;width:100%;height:auto;max-height:390px;object-fit:contain"></canvas><div id="ocrCropBox" style="position:absolute;left:${left}%;top:${top}%;width:${right-left}%;height:${bottom-top}%;border:2px solid #1683ff;background:rgba(22,131,255,.10);box-shadow:0 0 0 9999px rgba(0,0,0,.38);box-sizing:border-box;touch-action:none;cursor:move"><span data-crop-handle="nw" style="position:absolute;left:-7px;top:-7px"></span><span data-crop-handle="ne" style="position:absolute;right:-7px;top:-7px"></span><span data-crop-handle="sw" style="position:absolute;left:-7px;bottom:-7px"></span><span data-crop-handle="se" style="position:absolute;right:-7px;bottom:-7px"></span><span data-crop-handle="n" style="position:absolute;left:50%;top:-6px;transform:translateX(-50%)"></span><span data-crop-handle="s" style="position:absolute;left:50%;bottom:-6px;transform:translateX(-50%)"></span><span data-crop-handle="w" style="position:absolute;left:-6px;top:50%;transform:translateY(-50%)"></span><span data-crop-handle="e" style="position:absolute;right:-6px;top:50%;transform:translateY(-50%)"></span></div></div><div class="hint">حدود الاقتصاص: أفقي <b id="ocrCropX">${left}–${right}%</b>، عمودي <b id="ocrCropY">${top}–${bottom}%</b></div><canvas id="ocrPreview" style="display:none"></canvas><div id="ocrStatus" class="notice">سيتم تكبير المنطقة المحددة وتحسين التباين وإجراء أكثر من محاولة للتعرف على الأسماء.</div></div>`,[
- {text:'✨ استخراج بـ Gemini (أدق)',kind:'primary',fn:geminiAction},
- {text:'🧹 تبديل: صورة منظّفة ⇄ أصلية',kind:'soft',fn:togglePreview},
- {text:'استخراج بالقراءة المحلية',kind:'dark',fn:async()=>{const status=$('#ocrStatus');try{
+ {text:'استخراج الأسماء',kind:'primary',fn:async()=>{const status=$('#ocrStatus');try{
   if(!window.Tesseract){status.textContent='جارٍ تحميل مكتبة التعرف على النصوص...';await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('تعذر تحميل مكتبة OCR. اتصل بالإنترنت ثم حاول مجدداً.'));document.head.appendChild(sc)})}
-  try{const named=await ocrByLines(image,left,right,top,bottom,status);if(named.length){closeModal();showNamesReview(named,'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');return}}catch(e){console.warn('line OCR failed',e);if(status)status.textContent='جارٍ المحاولة بطريقة ثانية…'}
+  try{const named=await ocrByLines(image,left,right,top,bottom,status,await getCleanImage());if(named.length){closeModal();showNamesReview(named,'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');return}}catch(e){console.warn('line OCR failed',e);if(status)status.textContent='جارٍ المحاولة بطريقة ثانية…'}
   const source=$('#ocrPreview');if(!source||!source.width||!source.height)throw new Error('معاينة الصورة غير جاهزة');
   // أنشئ نسختين عاليتَي الدقة: تدرج رمادي محسّن ونسخة أبيض/أسود لإزالة أثر الظلال.
   const scale=Math.min(2.5,3200/Math.max(source.width,source.height));
@@ -708,6 +658,7 @@ async function extractNamesFromImage(file){
   if(!lines.length)throw new Error('لم تُقرأ أسماء واضحة. جرّب تحديد العمود بصورة أضيق أو تصوير الورقة بشكل مستقيم وبإضاءة جيدة.');
   closeModal();showNamesReview(lines.map(ocrFixName),'مراجعة الأسماء المستخرجة — راجعها قبل الحفظ');
  }catch(err){if(status)status.textContent='تعذر الاستخراج: '+(err?.message||err);else throw err}}},
+ {text:'🧹 عرض: منظّفة ⇄ أصلية',kind:'soft',fn:togglePreview},
  {text:'إلغاء',kind:'soft'}
  ],false);
  const stage=$('#ocrCropStage'),box=$('#ocrCropBox'),sourcePreview=$('#ocrSourcePreview');
@@ -1286,7 +1237,7 @@ async function cloudInit(){
 // إزالة إعدادات الدخول السحابي القديمة محلياً؛ لا يؤثر ذلك في بيانات Firebase نفسها.
 localStorage.removeItem('teacherCloudSession');
 localStorage.removeItem('teacherCloudConfig');
-ensureState().then(()=>{if(activeStage().classes.length===0)currentClass=-1;render();cloudInit();try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}});
+ensureState().then(()=>{if(activeStage().classes.length===0)currentClass=-1;render();cloudInit();try{idbSet('geminiCfg',null)}catch(e){}try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}});
 
 // service worker
 if('serviceWorker' in navigator && location.protocol!=='file:'){navigator.serviceWorker.register('sw.js').catch(()=>{})}
